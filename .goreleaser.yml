@@ -1,0 +1,174 @@
+version: 2
+
+project_name: ccm
+
+before:
+  hooks:
+    # Clean up any previous builds
+    - go mod tidy
+    - go mod download
+
+builds:
+  - id: ccm
+    main: ./cmd/main.go
+    binary: ccm
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: default
+    format: tar.gz
+    # Use zip for windows archives
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    files:
+      - README.md
+      - CHANGELOG.md
+      - CLAUDE.md
+      - LICENSE*
+      - commands/**/*
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - '^chore:'
+      - '^style:'
+  groups:
+    - title: 'New Features'
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: 'Bug Fixes'
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: 'Performance Improvements'
+      regexp: '^.*?perf(\(.+\))??!?:.+$'
+      order: 2
+    - title: 'Refactors'
+      regexp: '^.*?refactor(\(.+\))??!?:.+$'
+      order: 3
+    - title: 'Documentation'
+      regexp: '^.*?docs(\(.+\))??!?:.+$'
+      order: 4
+    - title: 'Other'
+      order: 999
+
+brews:
+  - name: ccm
+    description: "TUI for managing Claude Code custom commands"
+    homepage: "https://github.com/sheltontolbert/claude_command_manager"
+    license: "MIT"  # Update when license is added
+    
+    # Repository for the tap
+    repository:
+      owner: sheltontolbert
+      name: homebrew-claude-tools
+      branch: main
+      token: "{{ .Env.GITHUB_TOKEN }}"
+    
+    # Folder inside the repository
+    folder: Formula
+    
+    # Caveats to display after installation
+    caveats: |
+      To get started with ccm (Claude Command Manager):
+      
+      1. Navigate to a directory containing a .claude folder
+      2. Run: ccm
+      3. Use arrow keys to navigate, Enter to toggle commands
+      
+      For CLI usage:
+        ccm list        # List all commands
+        ccm help        # Show help
+      
+      For more information, visit: https://github.com/sheltontolbert/claude_command_manager
+
+    # Dependencies
+    dependencies:
+      - name: jq
+        type: optional
+    
+    # Test the installation
+    test: |
+      system "#{bin}/ccm", "help"
+
+    # Additional installation steps
+    install: |
+      bin.install "ccm"
+
+release:
+  github:
+    owner: sheltontolbert
+    name: claude_command_manager
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## Claude Command Manager {{ .Tag }}
+    
+    {{ .ReleaseNotes }}
+    
+    ### Installation
+    
+    #### Homebrew (macOS/Linux)
+    ```bash
+    brew tap sheltontolbert/claude-tools
+    brew install ccm
+    ```
+    
+    #### Manual Installation
+    Download the appropriate binary for your platform from the assets below.
+  
+  footer: |
+    ### Full Changelog
+    **Full Changelog**: https://github.com/sheltontolbert/claude_command_manager/compare/{{ .PreviousTag }}...{{ .Tag }}
+    
+    ---
+    
+    ### Support
+    If you encounter any issues, please report them at: https://github.com/sheltontolbert/claude_command_manager/issues
+
+# Signing (optional - for future use)
+# signs:
+#   - artifacts: checksum
+#     args:
+#       - "--batch"
+#       - "--local-user"
+#       - "{{ .Env.GPG_FINGERPRINT }}"
+#       - "--output"
+#       - "${signature}"
+#       - "--detach-sign"
+#       - "${artifact}"
