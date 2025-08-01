@@ -86,7 +86,7 @@ func NewModel(commandManager *commands.Manager, configManager *config.Manager) (
 
 	// Initialize list
 	l := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
-	l.Title = "Claude Command Library Manager"
+	l.Title = ""
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
 	l.SetShowHelp(false)
@@ -221,35 +221,6 @@ func (m *Model) ConfirmRename() tea.Cmd {
 	}
 }
 
-// DisableSelectedCommand disables the selected command and saves immediately
-func (m *Model) DisableSelectedCommand() tea.Cmd {
-	cmd := m.GetSelectedCommand()
-	if cmd == nil {
-		return nil
-	}
-
-	if !cmd.Enabled {
-		return nil // Already disabled
-	}
-
-	err := m.commandManager.DisableCommand(*cmd)
-	if err != nil {
-		return func() tea.Msg {
-			return ErrorMsg{Error: err}
-		}
-	}
-
-	// Save configuration immediately
-	if err := m.configManager.Save(); err != nil {
-		return func() tea.Msg {
-			return ErrorMsg{Error: err}
-		}
-	}
-	
-	return func() tea.Msg {
-		return RefreshMsg{}
-	}
-}
 
 // ToggleSelectedCommandLocation toggles the symlink location of the selected command and saves immediately
 func (m *Model) ToggleSelectedCommandLocation() tea.Cmd {

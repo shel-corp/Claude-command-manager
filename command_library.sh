@@ -127,7 +127,7 @@ remove_command_config() {
 
 # Print usage information
 print_usage() {
-    echo -e "Claude Command Library Manager"
+    echo -e "Claude Command Manager (ccm)"
     echo -e "${YELLOW}Usage:${RESET}"
     echo -e "  ./bin/command_library                          Launch interactive command manager"
     echo -e "  ./bin/command_library list                     List all available commands"
@@ -141,7 +141,6 @@ print_usage() {
     echo -e "  ↑/↓ or k/j   Navigate up/down"
     echo -e "  Enter        Toggle command enabled/disabled"
     echo -e "  r            Rename selected command"
-    echo -e "  d            Disable selected command"
     echo -e "  s            Save all changes and exit"
     echo -e "  q            Quit (with unsaved changes prompt)"
 }
@@ -462,7 +461,7 @@ display_menu() {
     local total_commands=${#commands[@]}
     
     clear 2>/dev/null || echo "===================="
-    echo "Claude Command Library Manager"
+    echo "Claude Command Manager (ccm)"
     echo
     
     if [[ $total_commands -eq 0 ]]; then
@@ -498,7 +497,7 @@ display_menu() {
     
     echo
     echo "Actions:"
-    echo "${YELLOW}[t]${RESET} Toggle command    ${YELLOW}[r]${RESET} Rename command    ${YELLOW}[d]${RESET} Disable command"
+    echo "${YELLOW}[t]${RESET} Toggle command    ${YELLOW}[r]${RESET} Rename command"
     echo "${YELLOW}[s]${RESET} Save and exit     ${YELLOW}[q]${RESET} Quit             ${YELLOW}[h]${RESET} Help"
     echo
 }
@@ -626,7 +625,6 @@ handle_menu_action() {
             echo "${YELLOW}Help:${RESET}"
             echo "  ${BLUE}t${RESET} - Toggle a command enabled/disabled"
             echo "  ${BLUE}r${RESET} - Rename a command"
-            echo "  ${BLUE}d${RESET} - Disable a command"
             echo "  ${BLUE}s${RESET} - Save all changes and exit"
             echo "  ${BLUE}q${RESET} - Quit (with confirmation if there are unsaved changes)"
             echo "  ${BLUE}h${RESET} - Show this help message"

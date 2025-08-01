@@ -28,7 +28,7 @@ func (m Model) mainView() string {
 	var content strings.Builder
 
 	// Header
-	content.WriteString(headerStyle.Render("Claude Command Library Manager"))
+	content.WriteString(headerStyle.Render("Claude Command Manager (ccm)"))
 	content.WriteString("\n\n")
 
 	// Main list
@@ -81,7 +81,6 @@ func (m Model) helpView() string {
 		{"↑/↓, j/k", "Navigate up/down"},
 		{"Enter, t", "Toggle command enabled/disabled"},
 		{"r", "Rename selected command"},
-		{"d", "Disable selected command"},
 		{"l", "Toggle symlink location (👤 user / 📁 project)"},
 		{"q", "Quit"},
 		{"h, ?", "Show this help screen"},
@@ -112,5 +111,5 @@ func (m Model) helpView() string {
 
 // renderFooter renders the footer with key bindings
 func (m Model) renderFooter() string {
-	return footerStyle.Render("Enter/t: Toggle • r: Rename • d: Disable • l: Location • q: Quit • h: Help")
+	return footerStyle.Render("Enter/t: Toggle • r: Rename • l: Location • q: Quit • h: Help")
 }

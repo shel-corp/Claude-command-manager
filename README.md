@@ -200,7 +200,6 @@ The tool includes comprehensive error handling for:
    - **Go version**: Changes are saved immediately
      - Press Enter to toggle enabled/disabled
      - Press 'r' to rename a command
-     - Press 'd' to disable a command
      - Press 'l' to toggle symlink location (user vs project)
    - **Shell version**: Session-based with explicit save
 5. **Exit**: Press 'q' to quit

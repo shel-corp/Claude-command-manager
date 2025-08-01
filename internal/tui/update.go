@@ -91,9 +91,6 @@ func (m *Model) handleMainStateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.StartRename()
 		return *m, nil
 		
-	case "d":
-		return *m, m.DisableSelectedCommand()
-		
 	case "l":
 		return *m, m.ToggleSelectedCommandLocation()
 		

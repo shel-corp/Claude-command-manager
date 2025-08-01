@@ -3,7 +3,11 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -259,30 +263,37 @@ func handleRenameCommand(commandManager *commands.Manager, configManager *config
 	return true
 }
 
+// centerText centers text in the terminal or returns it as-is if centering fails
+func centerText(text string) string {
+	// Try to get terminal width using tput command
+	if cmd := exec.Command("tput", "cols"); cmd != nil {
+		if output, err := cmd.Output(); err == nil {
+			if width, err := strconv.Atoi(strings.TrimSpace(string(output))); err == nil && width > len(text) {
+				padding := (width - len(text)) / 2
+				return strings.Repeat(" ", padding) + text
+			}
+		}
+	}
+	
+	// Fallback if we can't get terminal size
+	return text
+}
+
 func printUsage() {
-	fmt.Println("Claude Command Library Manager")
+	// Center the title
+	fmt.Println(centerText("Claude Command Manager"))
 	fmt.Println()
 	fmt.Println("Usage:")
-	fmt.Println("  command_library                          Launch interactive TUI")
-	fmt.Println("  command_library list                     List all available commands")
-	fmt.Println("  command_library status                   Show current command status")
-	fmt.Println("  command_library enable <command_name>    Enable a specific command")
-	fmt.Println("  command_library disable <command_name>   Disable a specific command")
-	fmt.Println("  command_library rename <cmd> <new_name>  Rename a command")
-	fmt.Println("  command_library help                     Show this help message")
+	fmt.Println("  ccm                          Launch interactive TUI")
+	fmt.Println("  ccm list                     List all available commands")
+	fmt.Println("  ccm status                   Show current command status")
+	fmt.Println("  ccm enable <command_name>    Enable a specific command")
+	fmt.Println("  ccm disable <command_name>   Disable a specific command")
+	fmt.Println("  ccm rename <cmd> <new_name>  Rename a command")
+	fmt.Println("  ccm help                     Show this help message")
 	fmt.Println()
-	fmt.Println("Interactive Mode Controls:")
-	fmt.Println("  ↑/↓ or j/k   Navigate up/down")
-	fmt.Println("  Enter/t      Toggle command enabled/disabled")
-	fmt.Println("  r            Rename selected command")
-	fmt.Println("  d            Disable selected command")
-	fmt.Println("  l            Toggle symlink location (👤 user / 📁 project)")
-	fmt.Println("  q            Quit")
-	fmt.Println("  h/?          Show help")
-	fmt.Println()
-	fmt.Println("Location Icons:")
-	fmt.Println("  👤 = User commands (symlinked to ~/.claude/commands/)")
-	fmt.Println("  📁 = Project commands (symlinked to <project>/.claude/commands/)")
-	fmt.Println()
-	fmt.Println("Note: All changes are saved immediately.")
+	
+	// Center the copyright text
+	copyrightText := fmt.Sprintf("© %d shelcorp. All rights reserved.", time.Now().Year())
+	fmt.Println(centerText(copyrightText))
 }
