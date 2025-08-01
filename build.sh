@@ -41,11 +41,11 @@ check_go() {
 # Build for current platform
 build_current() {
     print_info "Building for current platform..."
-    go build -o command_library cmd/main.go
-    print_success "Built: command_library"
+    go build -o ccm cmd/main.go
+    print_success "Built: ccm"
     
     # Make executable
-    chmod +x command_library
+    chmod +x ccm
 }
 
 # Build for multiple platforms
@@ -65,7 +65,7 @@ build_all() {
     for platform in "${platforms[@]}"; do
         local os=${platform%/*}
         local arch=${platform#*/}
-        local output="dist/command_library-$os-$arch"
+        local output="dist/ccm-$os-$arch"
         
         if [[ "$os" == "windows" ]]; then
             output="$output.exe"
@@ -85,7 +85,7 @@ build_all() {
 # Clean build artifacts
 clean() {
     print_info "Cleaning build artifacts..."
-    rm -f command_library
+    rm -f ccm
     rm -rf dist/
     print_success "Cleaned build artifacts"
 }
