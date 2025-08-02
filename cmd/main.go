@@ -13,6 +13,7 @@ import (
 
 	"github.com/sheltontolbert/claude_command_manager/internal/commands"
 	"github.com/sheltontolbert/claude_command_manager/internal/config"
+	"github.com/sheltontolbert/claude_command_manager/internal/remote"
 	"github.com/sheltontolbert/claude_command_manager/internal/tui"
 )
 
@@ -104,10 +105,22 @@ func handleCLICommands(args []string, commandsDir, configPath, userCommandsDir, 
 		return handleDisableCommand(commandManager, configManager, args[1])
 	case "rename":
 		if len(args) < 3 {
-			fmt.Fprintf(os.Stderr, "Usage: command_library rename <command_name> <new_name>\n")
+			fmt.Fprintf(os.Stderr, "Usage: ccm rename <command_name> <new_name>\n")
 			os.Exit(1)
 		}
 		return handleRenameCommand(commandManager, configManager, args[1], args[2])
+	case "import":
+		if len(args) < 2 {
+			fmt.Fprintf(os.Stderr, "Usage: ccm import <github_url>\n")
+			os.Exit(1)
+		}
+		return handleImportCommand(args[1])
+	case "browse":
+		if len(args) < 2 {
+			fmt.Fprintf(os.Stderr, "Usage: ccm browse <github_url>\n")
+			os.Exit(1)
+		}
+		return handleBrowseCommand(args[1])
 	case "help", "-h", "--help":
 		printUsage()
 		return true
@@ -290,10 +303,304 @@ func printUsage() {
 	fmt.Println("  ccm enable <command_name>    Enable a specific command")
 	fmt.Println("  ccm disable <command_name>   Disable a specific command")
 	fmt.Println("  ccm rename <cmd> <new_name>  Rename a command")
+	fmt.Println("  ccm import <github_url>      Import commands from GitHub repository")
+	fmt.Println("  ccm browse <github_url>      Browse available commands in repository")
 	fmt.Println("  ccm help                     Show this help message")
 	fmt.Println()
 	
 	// Center the copyright text
 	copyrightText := fmt.Sprintf("© %d shelcorp. All rights reserved.", time.Now().Year())
 	fmt.Println(centerText(copyrightText))
+}
+
+// handleBrowseCommand lists available commands in a remote repository
+func handleBrowseCommand(url string) bool {
+	// Parse the GitHub URL
+	repo, err := remote.ParseGitHubURL(url)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Initialize GitHub client
+	client := remote.NewGitHubClient()
+
+	// Show loading and validate
+	fmt.Printf("🔍 Connecting to %s/%s...", repo.Owner, repo.Repo)
+	if err := client.ValidateRepository(repo); err != nil {
+		fmt.Printf(" ❌\n")
+		fmt.Fprintf(os.Stderr, "Repository not accessible: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf(" ✅\n")
+
+	// Fetch commands with loading indicator
+	fmt.Printf("📦 Scanning for commands...")
+	if err := client.FetchCommands(repo); err != nil {
+		fmt.Printf(" ❌\n")
+		fmt.Fprintf(os.Stderr, "Failed to fetch commands: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf(" ✅\n")
+
+	if len(repo.Commands) == 0 {
+		fmt.Println("No commands found in repository.")
+		return true
+	}
+
+	// Load command details
+	fmt.Printf("🔄 Loading command details...")
+	for i := range repo.Commands {
+		if err := client.FetchCommandContent(repo, &repo.Commands[i]); err != nil {
+			repo.Commands[i].Description = "Failed to load description"
+		}
+	}
+	fmt.Printf(" ✅\n")
+
+	// Display commands
+	fmt.Printf("\n📋 Available commands in %s/%s:\n\n", repo.Owner, repo.Repo)
+	for i, cmd := range repo.Commands {
+		fmt.Printf("  %2d. %-20s %s\n", i+1, cmd.Name, 
+			truncateDescription(cmd.Description, 60))
+	}
+
+	fmt.Printf("\n💡 To import commands: ccm import %s\n", url)
+	return true
+}
+
+// handleImportCommand provides interactive import from a remote repository
+func handleImportCommand(url string) bool {
+	// Parse the GitHub URL
+	repo, err := remote.ParseGitHubURL(url)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Initialize GitHub client
+	client := remote.NewGitHubClient()
+
+	// Show loading and validate
+	fmt.Printf("🔍 Connecting to %s/%s...", repo.Owner, repo.Repo)
+	if err := client.ValidateRepository(repo); err != nil {
+		fmt.Printf(" ❌\n")
+		fmt.Fprintf(os.Stderr, "Repository not accessible: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf(" ✅\n")
+
+	// Fetch commands with loading indicator
+	fmt.Printf("📦 Scanning for commands...")
+	if err := client.FetchCommands(repo); err != nil {
+		fmt.Printf(" ❌\n")
+		fmt.Fprintf(os.Stderr, "Failed to fetch commands: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf(" ✅\n")
+
+	if len(repo.Commands) == 0 {
+		fmt.Println("No commands found in repository.")
+		return true
+	}
+
+	// Get target directory
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Could not get home directory: %v\n", err)
+		os.Exit(1)
+	}
+	targetDir := filepath.Join(homeDir, ".claude", "command_library")
+
+	// Load command contents and check local conflicts
+	fmt.Printf("🔄 Loading command details...")
+	importer := remote.NewImporter(targetDir)
+	
+	for i := range repo.Commands {
+		if err := client.FetchCommandContent(repo, &repo.Commands[i]); err != nil {
+			// Skip commands that fail to load
+			repo.Commands = append(repo.Commands[:i], repo.Commands[i+1:]...)
+			i--
+			continue
+		}
+	}
+	
+	if err := importer.CheckLocalExists(repo.Commands, targetDir); err != nil {
+		fmt.Printf(" ❌\n")
+		fmt.Fprintf(os.Stderr, "Error checking local commands: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf(" ✅\n")
+
+	// Display commands for selection
+	fmt.Printf("\n📋 Found %d commands:\n\n", len(repo.Commands))
+	
+	for i, cmd := range repo.Commands {
+		status := "NEW"
+		statusIcon := "🆕"
+		if cmd.LocalExists {
+			status = "EXISTS"
+			statusIcon = "⚠️"
+		}
+		
+		fmt.Printf("  %2d. %-20s %s %s %s\n", 
+			i+1, cmd.Name, statusIcon, status, 
+			truncateDescription(cmd.Description, 50))
+	}
+
+	// Interactive selection
+	fmt.Print("\n🎯 Select commands to import:\n")
+	fmt.Print("   • Enter numbers (e.g., 1,3,5-8) or 'all' for all commands\n")
+	fmt.Print("   • Commands marked ⚠️ already exist locally\n")
+	fmt.Print("\nSelection: ")
+	
+	var input string
+	fmt.Scanln(&input)
+	
+	if input == "" {
+		fmt.Println("No commands selected.")
+		return true
+	}
+
+	// Parse selection
+	selectedIndices, err := parseSelection(input, len(repo.Commands))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Invalid selection: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Mark selected commands
+	for i := range repo.Commands {
+		repo.Commands[i].Selected = false
+	}
+	for _, idx := range selectedIndices {
+		repo.Commands[idx].Selected = true
+	}
+
+	// Check for conflicts and ask about overwriting
+	hasConflicts := false
+	for _, idx := range selectedIndices {
+		if repo.Commands[idx].LocalExists {
+			hasConflicts = true
+			break
+		}
+	}
+
+	options := remote.GetDefaultImportOptions(targetDir)
+	if hasConflicts {
+		fmt.Print("\n⚠️  Some selected commands already exist. Overwrite them? (y/N): ")
+		var response string
+		fmt.Scanln(&response)
+		options.OverwriteExisting = strings.ToLower(response) == "y" || strings.ToLower(response) == "yes"
+	}
+
+	// Import selected commands
+	fmt.Printf("\n📥 Importing %d commands...", len(selectedIndices))
+	result, err := importer.ImportCommands(repo, repo.Commands, options)
+	if err != nil {
+		fmt.Printf(" ❌\n")
+		fmt.Fprintf(os.Stderr, "Import failed: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf(" ✅\n")
+
+	// Show results
+	fmt.Printf("\n🎉 Import Summary:\n")
+	fmt.Printf("   ✅ Imported: %d\n", len(result.Imported))
+	fmt.Printf("   ⏭️  Skipped:  %d\n", len(result.Skipped))
+	fmt.Printf("   ❌ Failed:   %d\n", len(result.Failed))
+
+	if len(result.Failed) > 0 {
+		fmt.Printf("\n❌ Failed imports:\n")
+		for i, name := range result.Failed {
+			fmt.Printf("   • %s: %s\n", name, result.Errors[i])
+		}
+	}
+
+	if len(result.Imported) > 0 {
+		fmt.Printf("\n📁 Commands saved to: %s\n", targetDir)
+	}
+
+	return true
+}
+
+// truncateDescription truncates a description to fit display width
+func truncateDescription(desc string, maxLen int) string {
+	if len(desc) <= maxLen {
+		return desc
+	}
+	return desc[:maxLen-3] + "..."
+}
+
+// parseSelection parses user input like "1,3,5-8" or "all" 
+func parseSelection(input string, maxCount int) ([]int, error) {
+	input = strings.TrimSpace(strings.ToLower(input))
+	
+	if input == "all" {
+		indices := make([]int, maxCount)
+		for i := range indices {
+			indices[i] = i
+		}
+		return indices, nil
+	}
+
+	var indices []int
+	parts := strings.Split(input, ",")
+	
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		
+		if strings.Contains(part, "-") {
+			// Handle ranges like "5-8"
+			rangeParts := strings.Split(part, "-")
+			if len(rangeParts) != 2 {
+				return nil, fmt.Errorf("invalid range format: %s", part)
+			}
+			
+			start, err := strconv.Atoi(strings.TrimSpace(rangeParts[0]))
+			if err != nil {
+				return nil, fmt.Errorf("invalid number: %s", rangeParts[0])
+			}
+			
+			end, err := strconv.Atoi(strings.TrimSpace(rangeParts[1]))
+			if err != nil {
+				return nil, fmt.Errorf("invalid number: %s", rangeParts[1])
+			}
+			
+			if start < 1 || end < 1 || start > maxCount || end > maxCount {
+				return nil, fmt.Errorf("numbers must be between 1 and %d", maxCount)
+			}
+			
+			if start > end {
+				start, end = end, start
+			}
+			
+			for i := start; i <= end; i++ {
+				indices = append(indices, i-1) // Convert to 0-based
+			}
+		} else {
+			// Handle single numbers
+			num, err := strconv.Atoi(part)
+			if err != nil {
+				return nil, fmt.Errorf("invalid number: %s", part)
+			}
+			
+			if num < 1 || num > maxCount {
+				return nil, fmt.Errorf("number must be between 1 and %d", maxCount)
+			}
+			
+			indices = append(indices, num-1) // Convert to 0-based
+		}
+	}
+
+	// Remove duplicates
+	seen := make(map[int]bool)
+	uniqueIndices := []int{}
+	for _, idx := range indices {
+		if !seen[idx] {
+			seen[idx] = true
+			uniqueIndices = append(uniqueIndices, idx)
+		}
+	}
+
+	return uniqueIndices, nil
 }
