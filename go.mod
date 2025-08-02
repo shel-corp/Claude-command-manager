@@ -1,4 +1,4 @@
-module github.com/sheltontolbert/claude_command_manager
+module github.com/shel-corp/Claude-command-manager
 
 go 1.24.3
 

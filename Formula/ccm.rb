@@ -1,9 +1,9 @@
 class Ccm < Formula
   desc "TUI for managing Claude Code custom commands"
-  homepage "https://github.com/sheltontolbert/claude_command_manager"
-  url "https://github.com/sheltontolbert/claude_command_manager/archive/refs/tags/v1.0.0.tar.gz"
+  homepage "https://github.com/shel-corp/Claude-command-manager"
+  url "https://github.com/shel-corp/Claude-command-manager/archive/refs/tags/v1.0.0.tar.gz"
   sha256 "" # Will be calculated when creating actual release
-  head "https://github.com/sheltontolbert/claude_command_manager.git", branch: "main"
+  head "https://github.com/shel-corp/Claude-command-manager.git", branch: "main"
   
   # Uncomment when license is added to repository
   # license "MIT"

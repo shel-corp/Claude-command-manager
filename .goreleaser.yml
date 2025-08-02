@@ -89,7 +89,7 @@ changelog:
 brews:
   - name: ccm
     description: "TUI for managing Claude Code custom commands"
-    homepage: "https://github.com/sheltontolbert/claude_command_manager"
+    homepage: "https://github.com/shel-corp/Claude-command-manager"
     license: "MIT"  # Update when license is added
     
     # Repository for the tap
@@ -114,7 +114,7 @@ brews:
         ccm list        # List all commands
         ccm help        # Show help
       
-      For more information, visit: https://github.com/sheltontolbert/claude_command_manager
+      For more information, visit: https://github.com/shel-corp/Claude-command-manager
 
     # Dependencies
     dependencies:
@@ -154,12 +154,12 @@ release:
   
   footer: |
     ### Full Changelog
-    **Full Changelog**: https://github.com/sheltontolbert/claude_command_manager/compare/{{ .PreviousTag }}...{{ .Tag }}
+    **Full Changelog**: https://github.com/shel-corp/Claude-command-manager/compare/{{ .PreviousTag }}...{{ .Tag }}
     
     ---
     
     ### Support
-    If you encounter any issues, please report them at: https://github.com/sheltontolbert/claude_command_manager/issues
+    If you encounter any issues, please report them at: https://github.com/shel-corp/Claude-command-manager/issues
 
 # Signing (optional - for future use)
 # signs:

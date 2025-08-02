@@ -55,7 +55,7 @@
 ### Immediate (Manual Distribution)
 1. **Create GitHub tag**: `git tag v1.0.0 && git push origin v1.0.0`
 2. **Calculate SHA256**: Download release tarball and update formula
-3. **Create tap repository**: `sheltontolbert/homebrew-claude-tools`
+3. **Create tap repository**: `shel-corp/homebrew-claude-tools`
 4. **Test installation**: `brew install --build-from-source`
 
 ### Automated (Recommended)
@@ -67,13 +67,13 @@
 
 ### Option 1: Custom Tap (Recommended)
 ```bash
-brew tap sheltontolbert/claude-tools
+brew tap shel-corp/claude-tools
 brew install ccm
 ```
 
 ### Option 2: Direct Installation
 ```bash
-brew install sheltontolbert/claude-tools/ccm
+brew install shel-corp/claude-tools/ccm
 ```
 
 ### Option 3: Homebrew Core (Future)
@@ -110,7 +110,7 @@ brew install sheltontolbert/claude-tools/ccm
 
 Users will be able to install with:
 ```bash
-brew tap sheltontolbert/claude-tools
+brew tap shel-corp/claude-tools
 brew install ccm
 ccm  # Launch TUI
 ```

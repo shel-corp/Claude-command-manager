@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sheltontolbert/claude_command_manager/internal/config"
+	"github.com/shel-corp/Claude-command-manager/internal/config"
 )
 
 // Command represents a single command with its metadata

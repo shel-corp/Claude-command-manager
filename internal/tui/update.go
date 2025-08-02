@@ -6,7 +6,7 @@ import (
 	
 	tea "github.com/charmbracelet/bubbletea"
 	
-	"github.com/sheltontolbert/claude_command_manager/internal/remote"
+	"github.com/shel-corp/Claude-command-manager/internal/remote"
 )
 
 // Message types for Bubble Tea

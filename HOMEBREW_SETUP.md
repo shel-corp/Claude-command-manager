@@ -27,7 +27,7 @@ We've created both manual and automated approaches for Homebrew distribution:
 1. **Create a new GitHub repository named `homebrew-claude-tools`**:
    ```bash
    # Clone the new repository
-   git clone https://github.com/sheltontolbert/homebrew-claude-tools.git
+   git clone https://github.com/shel-corp/homebrew-claude-tools.git
    cd homebrew-claude-tools
    
    # Copy the formula
@@ -57,7 +57,7 @@ We've created both manual and automated approaches for Homebrew distribution:
 2. **Calculate SHA256 for the release**:
    ```bash
    # Download the release tarball
-   wget https://github.com/sheltontolbert/claude_command_manager/archive/refs/tags/v1.0.0.tar.gz
+   wget https://github.com/shel-corp/Claude-command-manager/archive/refs/tags/v1.0.0.tar.gz
    
    # Calculate SHA256
    shasum -a 256 v1.0.0.tar.gz

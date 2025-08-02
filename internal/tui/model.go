@@ -7,9 +7,9 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/sheltontolbert/claude_command_manager/internal/commands"
-	"github.com/sheltontolbert/claude_command_manager/internal/config"
-	"github.com/sheltontolbert/claude_command_manager/internal/remote"
+	"github.com/shel-corp/Claude-command-manager/internal/commands"
+	"github.com/shel-corp/Claude-command-manager/internal/config"
+	"github.com/shel-corp/Claude-command-manager/internal/remote"
 )
 
 // State represents the current application state

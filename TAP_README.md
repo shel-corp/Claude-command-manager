@@ -108,10 +108,10 @@ If you encounter issues with any formula in this tap:
 
 ## Links
 
-- **Claude Command Manager**: https://github.com/sheltontolbert/claude_command_manager
+- **Claude Command Manager**: https://github.com/shel-corp/Claude-command-manager
 - **Homebrew Documentation**: https://docs.brew.sh/
 - **Homebrew Formula Cookbook**: https://docs.brew.sh/Formula-Cookbook
 
 ---
 
-*This tap is maintained by [@sheltontolbert](https://github.com/sheltontolbert)*
+*This tap is maintained by [@shel-corp](https://github.com/shel-corp)*

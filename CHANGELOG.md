@@ -31,5 +31,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Configuration Tracking**: JSON-based state management
 - **Immediate Save**: All changes saved instantly, no session management needed
 
-[Unreleased]: https://github.com/sheltontolbert/claude_command_manager/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/sheltontolbert/claude_command_manager/releases/tag/v1.0.0
+[Unreleased]: https://github.com/shel-corp/Claude-command-manager/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/shel-corp/Claude-command-manager/releases/tag/v1.0.0
