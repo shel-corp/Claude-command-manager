@@ -1,5 +1,6 @@
 #!/bin/bash
-cd /Users/sheltontolbert/repos/claude_command_manager
+# Change to the directory containing this script
+cd "$(dirname "$0")"
 
 echo "Testing Go build for Claude Command Manager"
 echo "Current directory: $(pwd)"

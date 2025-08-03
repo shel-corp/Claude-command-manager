@@ -53,15 +53,13 @@ func ParseGitHubURL(rawURL string) (*RemoteRepository, error) {
 		}
 	}
 
-	// If no path specified, assume .claude/commands
+	// If no path specified, assume .claude/commands as default
 	if commandPath == "" {
 		commandPath = ".claude/commands"
 	}
 
-	// Validate that path ends with /commands or is a commands directory
-	if !strings.HasSuffix(commandPath, "/commands") && !strings.HasSuffix(commandPath, "commands") {
-		return nil, fmt.Errorf("URL must point to a commands directory, got path: %s", commandPath)
-	}
+	// No validation on directory name - allow any directory structure
+	// The GitHub client will validate if the directory actually contains command files
 
 	// Validate owner and repo names (GitHub naming rules)
 	if err := validateGitHubName(owner); err != nil {

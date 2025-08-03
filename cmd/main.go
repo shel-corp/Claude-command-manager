@@ -42,7 +42,7 @@ func main() {
 		}
 	}
 
-	// Initialize managers
+	// Initialize managers for project library
 	configManager := config.NewManager(configPath)
 	if err := configManager.Load(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading configuration: %v\n", err)
@@ -51,20 +51,49 @@ func main() {
 
 	commandManager := commands.NewManager(commandsDir, userCommandsDir, projectCommandsDir, configManager)
 
+	// Initialize managers for user library
+	userCommandLibraryDir := filepath.Join(homeDir, ".claude", "command_library")
+	userConfigPath := filepath.Join(userCommandLibraryDir, ".config.json")
+	
+	// For user library, the commands are directly in the command_library directory
+	// (this maintains compatibility with existing user setups)
+	userCommandsLibraryDir := userCommandLibraryDir
+	
+	// Ensure user command library directory exists
+	if err := os.MkdirAll(userCommandsLibraryDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating user command library: %v\n", err)
+		os.Exit(1)
+	}
+	
+	userConfigManager := config.NewManager(userConfigPath)
+	if err := userConfigManager.Load(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading user configuration: %v\n", err)
+		os.Exit(1)
+	}
+
+	userCommandManager := commands.NewManager(userCommandsLibraryDir, userCommandsDir, projectCommandsDir, userConfigManager)
+
 	// Clean up any broken symlinks
 	if err := commandManager.CleanupBrokenSymlinks(); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: Failed to cleanup broken symlinks: %v\n", err)
 	}
+	if err := userCommandManager.CleanupBrokenSymlinks(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to cleanup broken user symlinks: %v\n", err)
+	}
 
 	// Create TUI model
-	model, err := tui.NewModel(commandManager, configManager)
+	model, err := tui.NewModel(commandManager, configManager, userCommandManager, userConfigManager)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating TUI model: %v\n", err)
 		os.Exit(1)
 	}
-
-	// Start the TUI application
-	p := tea.NewProgram(*model, tea.WithAltScreen())
+	
+	// Use alt screen to ensure proper screen clearing
+	p := tea.NewProgram(*model, 
+		tea.WithAltScreen(),
+		tea.WithMouseCellMotion(),
+	)
+	
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error running TUI: %v\n", err)
 		os.Exit(1)
@@ -124,6 +153,12 @@ func handleCLICommands(args []string, commandsDir, configPath, userCommandsDir, 
 	case "help", "-h", "--help":
 		printUsage()
 		return true
+	case "debug":
+		return handleDebugCommand(commandManager, configManager)
+	case "test-header":
+		return handleTestHeaderCommand()
+	case "simple-tui":
+		return handleSimpleTUICommand()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", args[0])
 		printUsage()
@@ -603,4 +638,162 @@ func parseSelection(input string, maxCount int) ([]int, error) {
 	}
 
 	return uniqueIndices, nil
+}
+
+// handleDebugCommand shows debug information and tests header rendering
+func handleDebugCommand(commandManager *commands.Manager, configManager *config.Manager) bool {
+	fmt.Println("=== Claude Command Manager Debug Information ===")
+	fmt.Println()
+	
+	// Test ASCII header rendering
+	asciiHeader := `
+ ╭─────────────────────────────────────────────────────────────╮
+ │                                                             │
+ │   ██████╗██╗      █████╗ ██╗   ██╗██████╗ ███████╗         │
+ │  ██╔════╝██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝         │
+ │  ██║     ██║     ███████║██║   ██║██║  ██║█████╗           │
+ │  ██║     ██║     ██╔══██║██║   ██║██║  ██║██╔══╝           │
+ │  ╚██████╗███████╗██║  ██║╚██████╔╝██████╔╝███████╗         │
+ │   ╚═════╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝         │
+ │                                                             │
+ │           Command Manager • Interactive TUI                 │
+ │                                                             │
+ ╰─────────────────────────────────────────────────────────────╯`
+ 
+	fmt.Println("ASCII Header Test:")
+	fmt.Println(asciiHeader)
+	fmt.Println()
+	
+	// Get terminal width
+	cmd := exec.Command("tput", "cols")
+	if output, err := cmd.Output(); err == nil {
+		if width, err := strconv.Atoi(strings.TrimSpace(string(output))); err == nil {
+			fmt.Printf("Terminal width: %d columns\n", width)
+			if width < 70 {
+				fmt.Println("⚠️  Terminal is narrow - ASCII header may not display properly")
+				fmt.Println("    Recommended: 70+ columns for full header display")
+			} else {
+				fmt.Println("✅ Terminal width is sufficient for ASCII header")
+			}
+		}
+	} else {
+		fmt.Println("Could not detect terminal width")
+	}
+	
+	// Check command loading
+	cmds, err := commandManager.ScanCommands()
+	if err != nil {
+		fmt.Printf("❌ Error loading commands: %v\n", err)
+	} else {
+		fmt.Printf("✅ Commands loaded: %d found\n", len(cmds))
+	}
+	
+	fmt.Println()
+	fmt.Println("To test TUI, run: ccm")
+	fmt.Println("If TUI doesn't show header, it may be a terminal compatibility issue.")
+	
+	return true
+}
+
+// handleTestHeaderCommand tests header display without TUI framework
+func handleTestHeaderCommand() bool {
+	fmt.Println("=== Direct Header Test (No TUI Framework) ===")
+	fmt.Println()
+	
+	// Clear screen
+	fmt.Print("\033[2J\033[H")
+	
+	// Display header exactly as it would appear in TUI with margins
+	asciiHeader := `
+
+
+    ╭─────────────────────────────────────────────────────────────╮
+    │                                                             │
+    │   ██████╗██╗      █████╗ ██╗   ██╗██████╗ ███████╗         │
+    │  ██╔════╝██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝         │
+    │  ██║     ██║     ███████║██║   ██║██║  ██║█████╗           │
+    │  ██║     ██║     ██╔══██║██║   ██║██║  ██║██╔══╝           │
+    │  ╚██████╗███████╗██║  ██║╚██████╔╝██████╔╝███████╗         │
+    │   ╚═════╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝         │
+    │                                                             │
+    │           Command Manager • Interactive TUI                 │
+    │                                                             │
+    ╰─────────────────────────────────────────────────────────────╯`
+ 
+	fmt.Println(asciiHeader)
+	fmt.Println()
+	fmt.Println("Manage your Claude AI command library with ease")
+	fmt.Println()
+	fmt.Println("📚 Library")
+	fmt.Println("   Manage your command library")
+	fmt.Println()
+	fmt.Println("📦 Import") 
+	fmt.Println("   Browse and import repository commands")
+	fmt.Println()
+	fmt.Println("↑/↓: Navigate • Enter: Select • q: Quit • h: Help")
+	fmt.Println()
+	fmt.Println("This is how the header SHOULD look in the TUI.")
+	fmt.Println("Press any key to continue...")
+	
+	// Wait for user input
+	var input string
+	fmt.Scanln(&input)
+	
+	return true
+}
+
+// Simple model for testing
+type simpleModel struct {
+	content string
+}
+
+func (m simpleModel) Init() tea.Cmd {
+	return nil
+}
+
+func (m simpleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "q" || msg.String() == "ctrl+c" {
+			return m, tea.Quit
+		}
+	}
+	return m, nil
+}
+
+func (m simpleModel) View() string {
+	header := `
+
+
+    ╭─────────────────────────────────────────────────────────────╮
+    │                                                             │
+    │   ██████╗██╗      █████╗ ██╗   ██╗██████╗ ███████╗         │
+    │  ██╔════╝██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝         │
+    │  ██║     ██║     ███████║██║   ██║██║  ██║█████╗           │
+    │  ██║     ██║     ██╔══██║██║   ██║██║  ██║██╔══╝           │
+    │  ╚██████╗███████╗██║  ██║╚██████╔╝██████╔╝███████╗         │
+    │   ╚═════╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝         │
+    │                                                             │
+    │           Command Manager • Interactive TUI                 │
+    │                                                             │
+    ╰─────────────────────────────────────────────────────────────╯`
+	
+	return header + "\n\nSimple TUI Test - ASCII Header Above\n\nPress 'q' to quit"
+}
+
+// handleSimpleTUICommand creates a minimal TUI test
+func handleSimpleTUICommand() bool {
+	fmt.Println("=== Simple TUI Test ===")
+	fmt.Println("Creating minimal Bubble Tea program...")
+	
+	model := simpleModel{content: "test"}
+	p := tea.NewProgram(model)
+	
+	fmt.Println("Starting simple TUI... (press 'q' to quit)")
+	if _, err := p.Run(); err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return false
+	}
+	
+	return true
 }

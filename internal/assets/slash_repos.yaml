@@ -1,0 +1,96 @@
+# Claude Code Remote Repository Registry
+# This file contains a curated list of repositories with Claude commands
+# organized by category for easy discovery and import.
+
+version: "1.0"
+last_updated: "2024-12-01"
+
+categories:
+  development:
+    name: "Development"
+    description: "Commands for day-to-day development tasks, coding workflows, and development automation"
+    icon: "🔧"
+    repositories:
+      - name: "Claude Command Suite - Dev"
+        url: "https://github.com/qdhenry/Claude-Command-Suite/tree/main/.claude/commands/dev"
+        description: "Comprehensive suite of development workflow commands for streamlining coding processes"
+        author: "qdhenry"
+        tags: ["workflow", "automation", "coding", "development"]
+        verified: true
+        
+  project_management:
+    name: "Project Management"
+    description: "Commands for project initialization, dependency management, and project tracking"
+    icon: "📋"
+    repositories:
+      - name: "Claude Command Suite - Project"
+        url: "https://github.com/qdhenry/Claude-Command-Suite/tree/main/.claude/commands/project"
+        description: "Project management commands for initializing projects, managing dependencies, and tracking progress"
+        author: "qdhenry"
+        tags: ["project", "management", "initialization", "dependencies"]
+        verified: true
+
+  performance:
+    name: "Performance"
+    description: "Commands for performance analysis, optimization, and monitoring"
+    icon: "⚡"
+    repositories:
+      - name: "Claude Command Suite - Performance"
+        url: "https://github.com/qdhenry/Claude-Command-Suite/tree/main/.claude/commands/performance"
+        description: "Performance auditing and optimization commands for analyzing build sizes and application performance"
+        author: "qdhenry"
+        tags: ["performance", "optimization", "analysis", "monitoring"]
+        verified: true
+
+  testing:
+    name: "Testing"
+    description: "Commands for test generation, quality assurance, and testing workflows"
+    icon: "🧪"
+    repositories:
+      - name: "Claude Command Suite - Testing"
+        url: "https://github.com/qdhenry/Claude-Command-Suite/tree/main/.claude/commands/test"
+        description: "Testing commands for generating test cases and implementing quality assurance workflows"
+        author: "qdhenry"
+        tags: ["testing", "qa", "test-generation", "quality"]
+        verified: true
+
+  security:
+    name: "Security"
+    description: "Commands for security audits, vulnerability scanning, and security best practices"
+    icon: "🔒"
+    repositories:
+      - name: "Claude Command Suite - Security"
+        url: "https://github.com/qdhenry/Claude-Command-Suite/tree/main/.claude/commands/security"
+        description: "Security-focused commands for performing security audits and identifying potential vulnerabilities"
+        author: "qdhenry"
+        tags: ["security", "audit", "vulnerability", "compliance"]
+        verified: true
+
+  general:
+    name: "General & Utilities"
+    description: "General-purpose commands and utilities for various tasks"
+    icon: "🛠️"
+    repositories:
+      - name: "Claude Command Suite - Main"
+        url: "https://github.com/qdhenry/Claude-Command-Suite"
+        description: "Main repository containing the comprehensive suite of Claude commands across all categories"
+        author: "qdhenry"
+        tags: ["general", "utilities", "comprehensive", "suite"]
+        verified: true
+
+# Schema for adding new repositories:
+# 
+# category_key:
+#   name: "Display Name"
+#   description: "Category description"
+#   icon: "🔧"
+#   repositories:
+#     - name: "Repository Display Name"
+#       url: "https://github.com/owner/repo/.claude/commands"
+#       description: "Brief description of what this repository provides"
+#       author: "github-username"
+#       tags: ["tag1", "tag2", "tag3"]
+#       verified: true/false
+#       language: "optional-language"
+#       difficulty: "beginner|intermediate|advanced"
+#       last_checked: "YYYY-MM-DD"

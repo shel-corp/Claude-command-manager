@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // GitHubContent represents a file or directory from GitHub API
@@ -20,11 +21,26 @@ type GitHubContent struct {
 }
 
 // GitHubClient handles GitHub API interactions using gh command
-type GitHubClient struct{}
+type GitHubClient struct{
+	cacheManager CacheManager // For repository caching
+}
+
+// RepositoryCacheManager interface for repository caching operations
+type RepositoryCacheManager interface {
+	GetRepositoryCacheRaw(repoKey string) ([]byte, []byte, time.Time, bool, string, error) // repoData, commandsData, cachedAt, isExpired, etag, error
+	SetRepositoryCache(repoKey string, repo interface{}, commands interface{}, etag string) error
+	GetRepositoryKey(owner, repo, branch, path string) string
+	IsEnabled() bool
+}
 
 // NewGitHubClient creates a new GitHub client
 func NewGitHubClient() *GitHubClient {
 	return &GitHubClient{}
+}
+
+// SetCacheManager sets the cache manager for the GitHub client
+func (c *GitHubClient) SetCacheManager(cacheManager CacheManager) {
+	c.cacheManager = cacheManager
 }
 
 // CheckGHInstalled verifies that gh command is available
@@ -38,18 +54,87 @@ func (c *GitHubClient) CheckGHInstalled() error {
 
 // FetchCommands recursively fetches all .md files from the repository's commands directory
 func (c *GitHubClient) FetchCommands(repo *RemoteRepository) error {
+	return c.FetchCommandsWithCache(repo, false)
+}
+
+// FetchCommandsWithCache fetches commands with optional cache support
+func (c *GitHubClient) FetchCommandsWithCache(repo *RemoteRepository, useCache bool) error {
 	if err := c.CheckGHInstalled(); err != nil {
 		return err
 	}
 
-	// Start recursive fetching from the root commands path
+	// Try cache first if enabled
+	if useCache && c.cacheManager != nil && c.cacheManager.IsEnabled() {
+		repoKey := c.generateRepoKey(repo)
+		if cachedRepo, cachedCommands, cachedAt, isExpired, _, err := c.getCachedRepositoryData(repoKey); err == nil && cachedRepo != nil && !isExpired {
+			// Use cached data
+			repo.Commands = cachedCommands
+			repo.LastFetched = cachedAt
+			return nil
+		}
+	}
+
+	// Cache miss or disabled - fetch from GitHub
 	commands, err := c.fetchCommandsRecursive(repo, "")
 	if err != nil {
 		return fmt.Errorf("failed to fetch commands: %w", err)
 	}
 
 	repo.Commands = commands
+	repo.LastFetched = time.Now()
+
+	// Cache the fetched data
+	if useCache && c.cacheManager != nil && c.cacheManager.IsEnabled() {
+		repoKey := c.generateRepoKey(repo)
+		if err := c.cacheRepositoryData(repoKey, repo, commands); err != nil {
+			// Log error but don't fail
+			fmt.Printf("Warning: failed to cache repository data: %v\n", err)
+		}
+	}
+
 	return nil
+}
+
+// generateRepoKey generates a cache key for the repository
+func (c *GitHubClient) generateRepoKey(repo *RemoteRepository) string {
+	if c.cacheManager != nil {
+		if rm, ok := c.cacheManager.(RepositoryCacheManager); ok {
+			return rm.GetRepositoryKey(repo.Owner, repo.Repo, repo.Branch, repo.Path)
+		}
+	}
+	// Fallback key generation
+	return fmt.Sprintf("%s_%s_%s_%s", repo.Owner, repo.Repo, repo.Branch, strings.ReplaceAll(repo.Path, "/", "_"))
+}
+
+// getCachedRepositoryData retrieves cached repository data
+func (c *GitHubClient) getCachedRepositoryData(repoKey string) (*RemoteRepository, []RemoteCommand, time.Time, bool, string, error) {
+	if rm, ok := c.cacheManager.(RepositoryCacheManager); ok {
+		repoData, commandsData, cachedAt, isExpired, etag, err := rm.GetRepositoryCacheRaw(repoKey)
+		if err != nil || repoData == nil {
+			return nil, nil, time.Time{}, false, "", err
+		}
+
+		var repo RemoteRepository
+		if err := json.Unmarshal(repoData, &repo); err != nil {
+			return nil, nil, time.Time{}, false, "", err
+		}
+
+		var commands []RemoteCommand
+		if err := json.Unmarshal(commandsData, &commands); err != nil {
+			return nil, nil, time.Time{}, false, "", err
+		}
+
+		return &repo, commands, cachedAt, isExpired, etag, nil
+	}
+	return nil, nil, time.Time{}, false, "", fmt.Errorf("cache manager does not support repository caching")
+}
+
+// cacheRepositoryData stores repository data in cache
+func (c *GitHubClient) cacheRepositoryData(repoKey string, repo *RemoteRepository, commands []RemoteCommand) error {
+	if rm, ok := c.cacheManager.(RepositoryCacheManager); ok {
+		return rm.SetRepositoryCache(repoKey, *repo, commands, "")
+	}
+	return fmt.Errorf("cache manager does not support repository caching")
 }
 
 // fetchCommandsRecursive recursively fetches commands from a directory
