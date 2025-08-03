@@ -6,7 +6,7 @@ import (
 )
 
 // View renders the application UI
-func (m Model) View() string {
+func (m *Model) View() string {
 	if m.quitting {
 		return "Goodbye!\n"
 	}
@@ -57,7 +57,7 @@ func (m Model) View() string {
 }
 
 // mainMenuView renders the main menu
-func (m Model) mainMenuView() string {
+func (m *Model) mainMenuView() string {
 	// Remove debug info now that TUI is working
 	// debugInfo := fmt.Sprintf("DEBUG: MainMenu - Width: %d, Height: %d, ListItems: %d\n", 
 	//	m.width, m.height, len(m.list.Items()))
@@ -84,24 +84,25 @@ func (m Model) mainMenuView() string {
     │                                                      │
     ╰──────────────────────────────────────────────────────╯`
 
-	// Always show ASCII header for now to test display
-	finalHeader := asciiHeader
+	// Responsive header - show simple version on narrow terminals
+	var finalHeader string
+	if m.width < 60 {
+		finalHeader = "╭──────────────────────╮\n│   CLAUDE COMMANDS    │\n╰──────────────────────╯"
+	} else {
+		finalHeader = asciiHeader
+	}
 	
 	content := m.list.View()
 	footer := "↑/↓: Navigate • Enter: Select • q: Quit • h: Help"
 	
-	// Debug info to see what's happening
-	debugInfo := fmt.Sprintf("DEBUG: Terminal size: %dx%d, Header length: %d chars", 
-		m.width, m.height, len(finalHeader))
-	
-	// Clean layout with debug info for testing
-	result := debugInfo + "\n" + finalHeader + "\n\n" + content + "\n\n" + footer
+	// Clean layout without debug info
+	result := finalHeader + "\n\n" + content + "\n\n" + footer
 	
 	return result
 }
 
 // libraryView renders the main application view
-func (m Model) libraryView() string {
+func (m *Model) libraryView() string {
 	// Header with library type
 	libraryType := m.GetLibraryModeString()
 	var icon string
@@ -111,14 +112,16 @@ func (m Model) libraryView() string {
 		icon = "📁"
 	}
 	header := fmt.Sprintf("%s Command Library (%s)", icon, libraryType)
-	content := m.list.View()
+	
+	// Include status message and main content
+	content := m.renderStatusMessage() + m.list.View()
 	footer := m.renderFooter()
 	
 	return centerView(header, content, footer, m.width)
 }
 
 // renameView renders the rename input view
-func (m Model) renameView() string {
+func (m *Model) renameView() string {
 	header := "Rename Command"
 	
 	var content strings.Builder
@@ -132,14 +135,20 @@ func (m Model) renameView() string {
 
 	content.WriteString("New name:\n")
 	content.WriteString(m.textInput.View())
+	
+	// Show validation errors
+	if errorMsg, hasError := m.validationErrors["name"]; hasError {
+		content.WriteString("\n")
+		content.WriteString(dangerStyle.Render("⚠️ " + errorMsg))
+	}
 
-	footer := "Enter: Confirm • Esc: Cancel • Ctrl+C: Quit"
+	footer := "Enter: Confirm • Esc: Back to Library • Ctrl+C: Quit"
 	
 	return centerView(header, content.String(), footer, m.width)
 }
 
 // helpView renders the help screen
-func (m Model) helpView() string {
+func (m *Model) helpView() string {
 	header := "Help"
 	
 	var content strings.Builder
@@ -190,7 +199,7 @@ func (m Model) helpView() string {
 // Note: Confirm quit view removed since changes are saved immediately
 
 // renderFooter renders the footer with key bindings
-func (m Model) renderFooter() string {
+func (m *Model) renderFooter() string {
 	if m.state == StateLibrary {
 		return "Enter/t: Toggle • r: Rename • l: Location • s: Switch Library • i: Import • Esc: Main Menu • q: Quit • h: Help"
 	}
@@ -200,7 +209,7 @@ func (m Model) renderFooter() string {
 // Remote import view functions
 
 // remoteBrowseView renders the repository browsing interface
-func (m Model) remoteBrowseView() string {
+func (m *Model) remoteBrowseView() string {
 	// Check if registry failed to load
 	if m.registryManager == nil || !m.registryManager.IsLoaded() {
 		return m.registryErrorView()
@@ -219,7 +228,7 @@ func (m Model) remoteBrowseView() string {
 }
 
 // registryErrorView renders error when registry fails to load
-func (m Model) registryErrorView() string {
+func (m *Model) registryErrorView() string {
 	header := "Repository Browser"
 	
 	var content strings.Builder
@@ -235,7 +244,7 @@ func (m Model) registryErrorView() string {
 }
 
 // categoryBrowseView renders the category browsing interface
-func (m Model) categoryBrowseView() string {
+func (m *Model) categoryBrowseView() string {
 	header := "📋 Browse Command Repositories"
 	
 	var content strings.Builder
@@ -249,7 +258,7 @@ func (m Model) categoryBrowseView() string {
 }
 
 // repositoryBrowseView renders the repository browsing interface
-func (m Model) repositoryBrowseView() string {
+func (m *Model) repositoryBrowseView() string {
 	// Header with category info
 	categoryName := "All Repositories"
 	categoryIcon := "📦"
@@ -274,13 +283,13 @@ func (m Model) repositoryBrowseView() string {
 }
 
 // searchBrowseView renders the search interface
-func (m Model) searchBrowseView() string {
+func (m *Model) searchBrowseView() string {
 	header := "🔍 Search Repositories"
 	
 	var content strings.Builder
 	// Search input
 	content.WriteString("Search: ")
-	content.WriteString(m.textInput.View())
+	content.WriteString(m.searchInput.View())
 	content.WriteString("\n\n")
 
 	if m.searchQuery == "" {
@@ -298,7 +307,7 @@ func (m Model) searchBrowseView() string {
 
 	// Instructions
 	var footer string
-	if m.textInput.Focused() {
+	if m.searchInput.Focused() {
 		footer = "Tab: Switch to Results • Esc: Clear/Exit • Enter: Search"
 	} else {
 		footer = "Tab: Search Input • Enter: Browse Commands • c: Custom URL • Esc: Exit"
@@ -308,7 +317,7 @@ func (m Model) searchBrowseView() string {
 }
 
 // remoteURLView renders the GitHub URL input view
-func (m Model) remoteURLView() string {
+func (m *Model) remoteURLView() string {
 	header := "Import Commands from GitHub"
 	
 	var content strings.Builder
@@ -325,19 +334,25 @@ func (m Model) remoteURLView() string {
 	content.WriteString(m.textInput.View())
 	content.WriteString("\n")
 
-	// Show error if present
+	// Show validation errors
+	if errorMsg, hasError := m.validationErrors["url"]; hasError {
+		content.WriteString("\n")
+		content.WriteString(dangerStyle.Render("⚠️ " + errorMsg))
+	}
+
+	// Show other errors if present
 	if m.remoteError != "" {
 		content.WriteString("\n")
 		content.WriteString(dangerStyle.Render("Error: " + m.remoteError))
 	}
 
-	footer := "Enter: Continue • Esc: Cancel • Ctrl+C: Quit"
+	footer := "Enter: Continue • Esc: Back to Browse • Ctrl+C: Quit"
 	
 	return centerView(header, content.String(), footer, m.width)
 }
 
 // remoteLoadingView renders the loading view
-func (m Model) remoteLoadingView() string {
+func (m *Model) remoteLoadingView() string {
 	header := "Loading Repository..."
 	
 	var content strings.Builder
@@ -350,21 +365,25 @@ func (m Model) remoteLoadingView() string {
 			subtleStyle.Render(m.remoteRepo.Path)))
 	}
 
-	// Loading animation
-	content.WriteString("🔍 Connecting to repository...\n")
+	// Simple loading spinner
+	spinner := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	// Use a simple time-based animation (this is a simplified approach)
+	spinnerChar := spinner[0] // In a real implementation, this would cycle
+	
+	content.WriteString(fmt.Sprintf("%s Connecting to repository...\n", spinnerChar))
 	content.WriteString("📦 Scanning for commands...\n")
 	content.WriteString("🔄 Loading command details...\n")
 	content.WriteString("⚠️  Checking for conflicts...\n\n")
 
 	content.WriteString(subtleStyle.Render("Please wait..."))
 
-	footer := ""
+	footer := "Loading... Please wait"
 	
 	return centerView(header, content.String(), footer, m.width)
 }
 
 // remoteSelectView renders the command selection view
-func (m Model) remoteSelectView() string {
+func (m *Model) remoteSelectView() string {
 	header := "Select Commands to Import"
 	
 	var content strings.Builder
@@ -401,7 +420,7 @@ func (m Model) remoteSelectView() string {
 }
 
 // remoteImportView renders the import progress view
-func (m Model) remoteImportView() string {
+func (m *Model) remoteImportView() string {
 	header := "Importing Commands..."
 	
 	selectedCount := 0
@@ -427,7 +446,7 @@ func (m Model) remoteImportView() string {
 }
 
 // remoteResultsView renders the import results view
-func (m Model) remoteResultsView() string {
+func (m *Model) remoteResultsView() string {
 	header := "Import Complete"
 	
 	var content strings.Builder
@@ -474,7 +493,7 @@ func (m Model) remoteResultsView() string {
 }
 
 // remoteRepoDetailsView renders the repository details input view
-func (m Model) remoteRepoDetailsView() string {
+func (m *Model) remoteRepoDetailsView() string {
 	header := "Repository Details"
 	
 	var content strings.Builder
@@ -490,6 +509,12 @@ func (m Model) remoteRepoDetailsView() string {
 	// Description input
 	content.WriteString("Description:\n")
 	content.WriteString(m.textInput.View())
+	
+	// Show validation errors
+	if errorMsg, hasError := m.validationErrors["description"]; hasError {
+		content.WriteString("\n")
+		content.WriteString(dangerStyle.Render("⚠️ " + errorMsg))
+	}
 	content.WriteString("\n\n")
 	
 	// Show current category selection status
@@ -513,13 +538,13 @@ func (m Model) remoteRepoDetailsView() string {
 		content.WriteString(dangerStyle.Render("Error: " + m.remoteError))
 	}
 
-	footer := "Tab: Select Category • Enter: Continue • Esc: Cancel"
+	footer := "Tab: Select Category • Enter: Continue • Esc: Back to URL"
 	
 	return centerView(header, content.String(), footer, m.width)
 }
 
 // remoteCategoryView renders the category selection view
-func (m Model) remoteCategoryView() string {
+func (m *Model) remoteCategoryView() string {
 	if m.isNewCategory && m.selectedCategoryKey == "new" {
 		// Show new category creation
 		return m.newCategoryCreationView()
@@ -539,7 +564,7 @@ func (m Model) remoteCategoryView() string {
 }
 
 // newCategoryCreationView renders the new category creation view
-func (m Model) newCategoryCreationView() string {
+func (m *Model) newCategoryCreationView() string {
 	header := "Create New Category"
 	
 	var content strings.Builder
@@ -547,7 +572,13 @@ func (m Model) newCategoryCreationView() string {
 	content.WriteString("\n\n")
 	
 	content.WriteString("Category Name:\n")
-	content.WriteString(m.textInput.View())
+	content.WriteString(m.categoryInput.View())
+	
+	// Show validation errors
+	if errorMsg, hasError := m.validationErrors["category"]; hasError {
+		content.WriteString("\n")
+		content.WriteString(dangerStyle.Render("⚠️ " + errorMsg))
+	}
 	content.WriteString("\n\n")
 	
 	content.WriteString(subtleStyle.Render("The category will be created with a default icon and description."))
@@ -557,4 +588,14 @@ func (m Model) newCategoryCreationView() string {
 	footer := "Enter: Create Category • Esc: Back to Category List"
 	
 	return centerView(header, content.String(), footer, m.width)
+}
+
+// renderStatusMessage renders a status message if one is set
+func (m *Model) renderStatusMessage() string {
+	if !m.showStatus || m.statusMessage == "" {
+		return ""
+	}
+	
+	style := m.getStatusStyle()
+	return "\n" + style.Render("● " + m.statusMessage) + "\n"
 }

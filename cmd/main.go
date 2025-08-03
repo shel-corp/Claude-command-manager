@@ -89,7 +89,7 @@ func main() {
 	}
 	
 	// Use alt screen to ensure proper screen clearing
-	p := tea.NewProgram(*model, 
+	p := tea.NewProgram(model, 
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)

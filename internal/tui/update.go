@@ -51,7 +51,7 @@ func (m Model) Init() tea.Cmd {
 }
 
 // Update handles messages and updates the model
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
@@ -59,10 +59,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		// Adjust list size to account for header and footer space
-		headerLines := 20 // More lines needed for header with margins 
-		footerLines := 5  // Lines for footer and spacing
-		availableHeight := msg.Height - headerLines - footerLines
+		// Calculate available space dynamically based on current state
+		availableHeight := m.calculateAvailableHeight()
 		if availableHeight < 3 {
 			availableHeight = 3 // Minimum height for list
 		}
@@ -79,8 +77,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case ErrorMsg:
-		// For now, just ignore errors. In a more complete implementation,
-		// we might show them in a status bar or popup
+		// Set error state for display to user
+		m.remoteError = msg.Error.Error()
+		// Return to appropriate state to show error
+		if m.state == StateRemoteLoading || m.state == StateRemoteImport {
+			m.state = StateRemoteURL
+		}
 		return m, nil
 
 	case RemoteLoadingMsg:
@@ -114,9 +116,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 		
 	case StateRemoteBrowse:
-		// Handle both list and text input based on browse mode
+		// Handle both list and search input based on browse mode
 		if m.browseMode == BrowseModeSearch {
-			m.textInput, cmd = m.textInput.Update(msg)
+			m.searchInput, cmd = m.searchInput.Update(msg)
 			cmds = append(cmds, cmd)
 			// Update search results in real-time
 			m.performSearch()
@@ -135,8 +137,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		
 	case StateRemoteCategory:
 		if m.isNewCategory && m.selectedCategoryKey == "new" {
-			// Handle text input for new category creation
-			m.textInput, cmd = m.textInput.Update(msg)
+			// Handle category input for new category creation
+			m.categoryInput, cmd = m.categoryInput.Update(msg)
 			cmds = append(cmds, cmd)
 		} else {
 			// Handle list navigation for category selection
@@ -183,117 +185,124 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleRemoteResultsStateKeys(msg)
 	}
 	
-	return *m, nil
+	return m, nil
 }
 
 // handleMainMenuStateKeys handles keys in the main menu state
 func (m *Model) handleMainMenuStateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+c", "q":
-		return *m, m.Quit()
+		return m, m.Quit()
 		
 	case "enter":
 		return m.executeSelectedMenuItem()
 		
 	case "1":
 		m.state = StateLibrary
-		return *m, nil
+		return m, nil
 		
 	case "2", "i":
 		m.StartRemoteImport()
-		return *m, nil
+		return m, nil
 		
 	case "h", "?":
 		m.state = StateHelp
-		return *m, nil
+		return m, nil
 	}
 	
 	// Let the list handle other keys (navigation)
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
-	return *m, cmd
+	return m, cmd
 }
 
 // executeSelectedMenuItem executes the action for the selected menu item
 func (m *Model) executeSelectedMenuItem() (tea.Model, tea.Cmd) {
 	selectedItem := m.GetSelectedMenuItem()
 	if selectedItem == nil {
-		return *m, nil
+		return m, nil
 	}
 	
 	switch selectedItem.action {
 	case "library":
 		// Switch to library view and refresh command list
 		m.state = StateLibrary
-		return *m, func() tea.Msg {
+		return m, func() tea.Msg {
 			return RefreshMsg{}
 		}
 	case "import":
 		m.StartRemoteImport()
-		return *m, nil
+		return m, nil
 	}
 	
-	return *m, nil
+	return m, nil
 }
 
 // handleLibraryStateKeys handles keys in the library state
 func (m *Model) handleLibraryStateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+c", "q":
-		return *m, m.Quit()
+		return m, m.Quit()
 		
 	case "esc":
+		m.clearStatus()
 		m.state = StateMainMenu
 		m.initMainMenu()
-		return *m, nil
+		return m, nil
 		
 	case "enter", "t":
-		return *m, m.ToggleSelectedCommand()
+		return m, m.ToggleSelectedCommand()
 		
 	case "r":
 		m.StartRename()
-		return *m, nil
+		return m, nil
 		
 	case "l":
-		return *m, m.ToggleSelectedCommandLocation()
+		return m, m.ToggleSelectedCommandLocation()
 		
 	case "s":
-		return *m, m.SwitchLibraryMode()
+		return m, m.SwitchLibraryMode()
 		
 	case "i":
 		m.StartRemoteImport()
-		return *m, nil
+		return m, nil
 		
 	case "h", "?":
 		m.state = StateHelp
-		return *m, nil
+		return m, nil
 	}
 	
 	// Let the list handle other keys (navigation)
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
-	return *m, cmd
+	return m, cmd
 }
 
 // handleRenameStateKeys handles keys in the rename state
 func (m *Model) handleRenameStateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
-		return *m, m.ConfirmRename()
+		if m.validateInput() {
+			return m, m.ConfirmRename()
+		}
+		return m, nil // Show validation errors
 		
 	case "esc":
-		m.state = StateMainMenu
-		m.initMainMenu()
-		return *m, nil
+		m.clearValidationErrors()
+		m.state = StateLibrary
+		return m, nil
 		
 	case "ctrl+c":
-		return *m, m.Quit()
+		return m, m.Quit()
 	}
+	
+	// Clear validation errors on input change
+	m.clearValidationErrors()
 	
 	// Let text input handle other keys
 	var cmd tea.Cmd
 	m.textInput, cmd = m.textInput.Update(msg)
-	return *m, cmd
+	return m, cmd
 }
 
 // handleHelpStateKeys handles keys in the help state
@@ -302,13 +311,13 @@ func (m *Model) handleHelpStateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc", "h", "?", "q", "enter":
 		m.state = StateMainMenu
 		m.initMainMenu()
-		return *m, nil
+		return m, nil
 		
 	case "ctrl+c":
-		return *m, m.Quit()
+		return m, m.Quit()
 	}
 	
-	return *m, nil
+	return m, nil
 }
 
 // Note: Confirm quit state removed since changes are saved immediately
@@ -317,7 +326,7 @@ func (m *Model) handleHelpStateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *Model) handleRemoteLoading() (tea.Model, tea.Cmd) {
 	// Start async loading of remote repository data with caching
-	return *m, func() tea.Msg {
+	return m, func() tea.Msg {
 		client := remote.NewGitHubClient()
 		
 		// Set cache manager if available
@@ -362,7 +371,7 @@ func (m *Model) handleRemoteLoaded(msg RemoteLoadedMsg) (tea.Model, tea.Cmd) {
 	if msg.Error != "" {
 		m.remoteError = msg.Error
 		m.state = StateRemoteURL
-		return *m, nil
+		return m, nil
 	}
 	
 	// Store commands and initialize selection state
@@ -373,12 +382,12 @@ func (m *Model) handleRemoteLoaded(msg RemoteLoadedMsg) (tea.Model, tea.Cmd) {
 	m.state = StateRemoteSelect
 	m.updateRemoteCommandList()
 	
-	return *m, nil
+	return m, nil
 }
 
 func (m *Model) handleRemoteImport(msg RemoteImportMsg) (tea.Model, tea.Cmd) {
 	// Start async import process
-	return *m, func() tea.Msg {
+	return m, func() tea.Msg {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			return RemoteImportCompleteMsg{Error: err.Error()}
@@ -404,13 +413,13 @@ func (m *Model) handleRemoteImportComplete(msg RemoteImportCompleteMsg) (tea.Mod
 	if msg.Error != "" {
 		m.remoteError = msg.Error
 		m.state = StateRemoteSelect
-		return *m, nil
+		return m, nil
 	}
 	
 	m.remoteResult = msg.Result
 	m.state = StateRemoteResults
 	
-	return *m, nil
+	return m, nil
 }
 
 // Remote state key handlers
@@ -429,7 +438,7 @@ func (m *Model) handleRemoteBrowseStateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd)
 	case BrowseModeSearch:
 		return m.handleSearchKeys(msg)
 	default:
-		return *m, nil
+		return m, nil
 	}
 }
 
@@ -437,47 +446,47 @@ func (m *Model) handleRegistryErrorKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "c":
 		m.goToCustomURL()
-		return *m, nil
+		return m, nil
 		
 	case "esc":
 		m.state = StateMainMenu
 		m.initMainMenu()
-		return *m, nil
+		return m, nil
 		
 	case "ctrl+c":
-		return *m, m.Quit()
+		return m, m.Quit()
 	}
 	
-	return *m, nil
+	return m, nil
 }
 
 func (m *Model) handleCategoryBrowseKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
 		m.enterCategory()
-		return *m, nil
+		return m, nil
 		
 	case "/", "s":
 		m.startSearch()
-		return *m, nil
+		return m, nil
 		
 	case "c":
 		m.goToCustomURL()
-		return *m, nil
+		return m, nil
 		
 	case "esc":
 		m.state = StateMainMenu
 		m.initMainMenu()
-		return *m, nil
+		return m, nil
 		
 	case "ctrl+c":
-		return *m, m.Quit()
+		return m, m.Quit()
 	}
 	
 	// Let the list handle other keys (navigation)
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
-	return *m, cmd
+	return m, cmd
 }
 
 func (m *Model) handleRepositoryBrowseKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -489,10 +498,10 @@ func (m *Model) handleRepositoryBrowseKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 			// Show bounds error to user
 			m.remoteError = "No repository selected. Please select a repository from the list."
 			m.state = StateRemoteURL
-			return *m, nil
+			return m, nil
 		}
 		focusedRepo := m.filteredRepos[index]
-		return *m, m.importSingleRepository(focusedRepo)
+		return m, m.importSingleRepository(focusedRepo)
 		
 	case " ":
 		// Space also loads repository commands (alternative to Enter)
@@ -501,34 +510,34 @@ func (m *Model) handleRepositoryBrowseKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 			// Show bounds error to user
 			m.remoteError = "No repository selected. Please select a repository from the list."
 			m.state = StateRemoteURL
-			return *m, nil
+			return m, nil
 		}
 		focusedRepo := m.filteredRepos[index]
-		return *m, m.importSingleRepository(focusedRepo)
+		return m, m.importSingleRepository(focusedRepo)
 		
 	case "/", "s":
 		m.startSearch()
-		return *m, nil
+		return m, nil
 		
 	case "c":
 		m.goToCustomURL()
-		return *m, nil
+		return m, nil
 		
 	case "esc":
 		// Go back to categories
 		m.browseMode = BrowseModeCategories
 		m.currentCategory = ""
 		m.updateBrowseList()
-		return *m, nil
+		return m, nil
 		
 	case "ctrl+c":
-		return *m, m.Quit()
+		return m, m.Quit()
 	}
 	
 	// Let the list handle other keys (navigation)
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
-	return *m, cmd
+	return m, cmd
 }
 
 func (m *Model) handleSearchKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -539,160 +548,182 @@ func (m *Model) handleSearchKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			index := m.list.Index()
 			if index >= 0 && index < len(m.filteredRepos) {
 				focusedRepo := m.filteredRepos[index]
-				return *m, m.importSingleRepository(focusedRepo)
+				return m, m.importSingleRepository(focusedRepo)
 			} else {
 				// Show bounds error to user
 				m.remoteError = "No repository selected. Please select a repository from the search results."
 				m.state = StateRemoteURL
 			}
 		}
-		return *m, nil
+		return m, nil
 		
 	case "tab":
 		// Switch focus between search input and results
-		if m.textInput.Focused() {
-			m.textInput.Blur()
+		if m.searchInput.Focused() {
+			m.searchInput.Blur()
 		} else {
-			m.textInput.Focus()
+			m.searchInput.Focus()
 		}
-		return *m, nil
+		return m, nil
 		
 	case "esc":
-		if m.textInput.Value() != "" {
+		if m.searchInput.Value() != "" {
 			// Clear search first
-			m.textInput.SetValue("")
+			m.searchInput.SetValue("")
 			m.performSearch()
 		} else {
 			// Exit search mode
 			m.exitSearch()
 		}
-		return *m, nil
+		return m, nil
 		
 	// Removed multi-select functionality - repositories are now single-select
 		
 	case "c":
 		m.goToCustomURL()
-		return *m, nil
+		return m, nil
 		
 	case "ctrl+c":
-		return *m, m.Quit()
+		return m, m.Quit()
 	}
 	
-	// Let text input or list handle other keys based on focus
-	if m.textInput.Focused() {
+	// Let search input or list handle other keys based on focus
+	if m.searchInput.Focused() {
 		var cmd tea.Cmd
-		m.textInput, cmd = m.textInput.Update(msg)
-		return *m, cmd
+		m.searchInput, cmd = m.searchInput.Update(msg)
+		return m, cmd
 	} else {
 		var cmd tea.Cmd
 		m.list, cmd = m.list.Update(msg)
-		return *m, cmd
+		return m, cmd
 	}
 }
 
 func (m *Model) handleRemoteURLStateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
-		return *m, m.ProcessRemoteURL()
+		if m.validateInput() {
+			return m, m.ProcessRemoteURL()
+		}
+		return m, nil // Show validation errors
 		
 	case "esc":
-		m.state = StateMainMenu
-		m.initMainMenu()
-		return *m, nil
+		m.clearValidationErrors()
+		m.state = StateRemoteBrowse
+		m.browseMode = BrowseModeCategories
+		m.updateBrowseList()
+		return m, nil
 		
 	case "ctrl+c":
-		return *m, m.Quit()
+		return m, m.Quit()
 	}
+	
+	// Clear validation errors on input change
+	m.clearValidationErrors()
 	
 	// Let text input handle other keys
 	var cmd tea.Cmd
 	m.textInput, cmd = m.textInput.Update(msg)
-	return *m, cmd
+	return m, cmd
 }
 
 func (m *Model) handleRemoteSelectStateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
 		m.ToggleRemoteCommand()
-		return *m, nil
+		return m, nil
 		
 	case "a":
 		m.SelectAllRemoteCommands(true)
-		return *m, nil
+		return m, nil
 		
 	case "n":
 		m.SelectAllRemoteCommands(false)
-		return *m, nil
+		return m, nil
 		
 	case "i":
-		return *m, m.StartRemoteImportProcess()
+		return m, m.StartRemoteImportProcess()
 		
 	case "esc":
 		m.state = StateMainMenu
 		m.initMainMenu()
-		return *m, nil
+		return m, nil
 		
 	case "ctrl+c":
-		return *m, m.Quit()
+		return m, m.Quit()
 	}
 	
 	// Let the list handle other keys (navigation)
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
-	return *m, cmd
+	return m, cmd
 }
 
 func (m *Model) handleRemoteResultsStateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter", "esc", "q":
-		return *m, m.ReturnToMain()
+		return m, m.ReturnToMain()
 		
 	case "ctrl+c":
-		return *m, m.Quit()
+		return m, m.Quit()
 	}
 	
-	return *m, nil
+	return m, nil
 }
 
 // handleRemoteRepoDetailsStateKeys handles keys in the repository details input state
 func (m *Model) handleRemoteRepoDetailsStateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
+		if !m.validateInput() {
+			return m, nil // Show validation errors
+		}
+		
 		// Update description from input
 		m.customRepoInput.Description = strings.TrimSpace(m.textInput.Value())
 		
 		// Check if category is already selected
 		if m.customRepoInput.Category.CategoryKey != "" {
 			// Category already selected, finalize the repository
+			m.clearValidationErrors()
 			m.finalizeCustomRepository()
-			return *m, func() tea.Msg {
+			return m, func() tea.Msg {
 				return RemoteLoadingMsg{}
 			}
 		} else {
 			// Need to select category first
+			m.clearValidationErrors()
 			m.startCategorySelection()
-			return *m, nil
+			return m, nil
 		}
 		
 	case "tab":
+		if !m.validateInput() {
+			return m, nil // Stay on current field if invalid
+		}
 		// Update description and move to category selection
 		m.customRepoInput.Description = strings.TrimSpace(m.textInput.Value())
+		m.clearValidationErrors()
 		m.startCategorySelection()
-		return *m, nil
+		return m, nil
 		
 	case "esc":
+		m.clearValidationErrors()
 		m.state = StateRemoteURL
 		m.goToCustomURL()
-		return *m, nil
+		return m, nil
 		
 	case "ctrl+c":
-		return *m, m.Quit()
+		return m, m.Quit()
 	}
+	
+	// Clear validation errors on input change
+	m.clearValidationErrors()
 	
 	// Let text input handle other keys
 	var cmd tea.Cmd
 	m.textInput, cmd = m.textInput.Update(msg)
-	return *m, cmd
+	return m, cmd
 }
 
 // handleRemoteCategoryStateKeys handles keys in the category selection state
@@ -700,11 +731,13 @@ func (m *Model) handleRemoteCategoryStateKeys(msg tea.KeyMsg) (tea.Model, tea.Cm
 	switch msg.String() {
 	case "enter":
 		if m.isNewCategory && m.selectedCategoryKey == "new" {
-			// Creating new category - get the name from text input
-			newCategoryName := strings.TrimSpace(m.textInput.Value())
-			if newCategoryName == "" {
-				return *m, nil // Don't proceed with empty name
+			// Creating new category - validate input first
+			if !m.validateInput() {
+				return m, nil // Show validation errors
 			}
+			
+			// Get the name from category input
+			newCategoryName := strings.TrimSpace(m.categoryInput.Value())
 			
 			// Create category key from name (lowercase, replace spaces with underscores)
 			categoryKey := strings.ToLower(strings.ReplaceAll(newCategoryName, " ", "_"))
@@ -719,47 +752,53 @@ func (m *Model) handleRemoteCategoryStateKeys(msg tea.KeyMsg) (tea.Model, tea.Cm
 			}
 			
 			// Finalize the repository
+			m.clearValidationErrors()
 			m.finalizeCustomRepository()
-			return *m, func() tea.Msg {
+			return m, func() tea.Msg {
 				return RemoteLoadingMsg{}
 			}
 		} else {
 			// Selecting existing category
+			m.clearValidationErrors()
 			m.confirmCategorySelection()
 			m.finalizeCustomRepository()
-			return *m, func() tea.Msg {
+			return m, func() tea.Msg {
 				return RemoteLoadingMsg{}
 			}
 		}
 		
 	case "esc":
+		m.clearValidationErrors()
 		if m.isNewCategory && m.selectedCategoryKey == "new" {
 			// Go back to category list from new category creation
 			m.isNewCategory = false
 			m.selectedCategoryKey = ""
 			m.setupCategorySelection()
-			return *m, nil
+			return m, nil
 		} else {
 			// Go back to repository details
 			m.state = StateRemoteRepoDetails
 			m.setupRepoDetailsInput()
-			return *m, nil
+			return m, nil
 		}
 		
 	case "ctrl+c":
-		return *m, m.Quit()
+		return m, m.Quit()
 	}
+	
+	// Clear validation errors on input change
+	m.clearValidationErrors()
 	
 	// Handle different input contexts
 	if m.isNewCategory && m.selectedCategoryKey == "new" {
-		// Handle text input for new category creation
+		// Handle category input for new category creation
 		var cmd tea.Cmd
-		m.textInput, cmd = m.textInput.Update(msg)
-		return *m, cmd
+		m.categoryInput, cmd = m.categoryInput.Update(msg)
+		return m, cmd
 	} else {
 		// Handle list navigation for category selection
 		var cmd tea.Cmd
 		m.list, cmd = m.list.Update(msg)
-		return *m, cmd
+		return m, cmd
 	}
 }

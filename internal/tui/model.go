@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/shel-corp/Claude-command-manager/internal/cache"
 	"github.com/shel-corp/Claude-command-manager/internal/commands"
@@ -25,11 +26,10 @@ const (
 	StateHelp
 	StateRemoteBrowse
 	StateRemoteURL
-	StateRemoteRepoDetails  // New: Repository details input
-	StateRemoteCategory     // New: Category selection
+	StateRemoteRepoDetails  // Repository details input
+	StateRemoteCategory     // Category selection
 	StateRemoteLoading
 	StateRemoteSelect
-	StateRemoteConflict
 	StateRemoteImport
 	StateRemoteResults
 )
@@ -41,7 +41,6 @@ const (
 	BrowseModeCategories BrowseMode = iota
 	BrowseModeRepositories
 	BrowseModeSearch
-	BrowseModeCustomURL
 )
 
 // LibraryMode represents which command library is currently being viewed
@@ -52,11 +51,23 @@ const (
 	LibraryModeUser                       // User's home command library
 )
 
+// StatusType represents the type of status message
+type StatusType int
+
+const (
+	StatusInfo StatusType = iota
+	StatusSuccess
+	StatusError
+	StatusWarning
+)
+
 // Model represents the application state for Bubble Tea
 type Model struct {
-	// Core components
-	list         list.Model
-	textInput    textinput.Model
+	// Core components - separate instances for different contexts
+	list           list.Model        // Main list for navigation
+	textInput      textinput.Model   // Primary text input
+	searchInput    textinput.Model   // Dedicated search input
+	categoryInput  textinput.Model   // Category creation input
 	
 	// Managers
 	commandManager     *commands.Manager
@@ -91,10 +102,18 @@ type Model struct {
 	remoteResult    *remote.ImportResult
 	
 	// Custom repository input state
-	customRepoInput   registry.RepositoryInput
+	customRepoInput     registry.RepositoryInput
 	availableCategories map[string]string  // key -> name mapping
 	selectedCategoryKey string
 	isNewCategory       bool
+	
+	// Input validation state
+	validationErrors    map[string]string  // field -> error message
+	
+	// UI feedback state
+	statusMessage       string             // Status message to display
+	statusType          StatusType         // Type of status (info, success, error)
+	showStatus          bool               // Whether to show status message
 	
 	// Repository browsing state
 	registryManager    *registry.EnhancedRegistryManager
@@ -271,12 +290,21 @@ func NewModel(commandManager *commands.Manager, configManager *config.Manager, u
 		fmt.Printf("Warning: failed to initialize cache manager: %v\n", err)
 		cacheManager = nil
 	}
-	// Initialize text input for rename functionality
+	// Initialize text inputs for different contexts
 	ti := textinput.New()
 	ti.Placeholder = "Enter new name..."
-	ti.Focus()
 	ti.CharLimit = 300
 	ti.Width = 60
+	
+	searchInput := textinput.New()
+	searchInput.Placeholder = "Search repositories..."
+	searchInput.CharLimit = 100
+	searchInput.Width = 60
+	
+	categoryInput := textinput.New()
+	categoryInput.Placeholder = "Enter category name..."
+	categoryInput.CharLimit = 50
+	categoryInput.Width = 60
 
 	// Initialize list with custom delegate to remove default styling
 	delegate := list.NewDefaultDelegate()
@@ -310,6 +338,8 @@ func NewModel(commandManager *commands.Manager, configManager *config.Manager, u
 	model := &Model{
 		list:               l,
 		textInput:          ti,
+		searchInput:        searchInput,
+		categoryInput:      categoryInput,
 		commandManager:     commandManager,
 		configManager:      configManager,
 		userCommandManager: userCommandManager,
@@ -318,9 +348,10 @@ func NewModel(commandManager *commands.Manager, configManager *config.Manager, u
 		state:              StateMainMenu,
 		libraryMode:        LibraryModeProject, // Start with project library
 		registryManager:    registryManager,
-		browseSelected:     make(map[int]bool),
+		browseSelected:      make(map[int]bool),
 		availableCategories: make(map[string]string),
-		customRepoInput:    registry.RepositoryInput{},
+		customRepoInput:     registry.RepositoryInput{},
+		validationErrors:    make(map[string]string),
 	}
 
 	// Load commands
@@ -461,6 +492,7 @@ func (m *Model) ToggleSelectedCommand() tea.Cmd {
 	currentConfigManager := m.getCurrentConfigManager()
 	
 	var err error
+	wasEnabled := cmd.Enabled
 
 	if cmd.Enabled {
 		err = currentCommandManager.DisableCommand(*cmd)
@@ -479,6 +511,13 @@ func (m *Model) ToggleSelectedCommand() tea.Cmd {
 		return func() tea.Msg {
 			return ErrorMsg{Error: err}
 		}
+	}
+	
+	// Set success status message  
+	if wasEnabled {
+		m.setStatus(fmt.Sprintf("Disabled command: %s", cmd.DisplayName), StatusSuccess)
+	} else {
+		m.setStatus(fmt.Sprintf("Enabled command: %s", cmd.DisplayName), StatusSuccess)
 	}
 	
 	return func() tea.Msg {
@@ -863,14 +902,13 @@ func (m *Model) getSelectedRepositories() []remote.CuratedRepository {
 // startSearch initiates search mode
 func (m *Model) startSearch() {
 	m.browseMode = BrowseModeSearch
-	m.textInput.SetValue("")
-	m.textInput.Placeholder = "Search repositories..."
-	m.textInput.Focus()
+	m.searchInput.SetValue("")
+	m.searchInput.Focus()
 }
 
 // performSearch updates search results based on current query
 func (m *Model) performSearch() {
-	m.searchQuery = strings.TrimSpace(m.textInput.Value())
+	m.searchQuery = strings.TrimSpace(m.searchInput.Value())
 	m.updateSearchResults()
 }
 
@@ -878,7 +916,7 @@ func (m *Model) performSearch() {
 func (m *Model) exitSearch() {
 	m.browseMode = BrowseModeCategories
 	m.searchQuery = ""
-	m.textInput.Blur()
+	m.searchInput.Blur()
 	m.updateBrowseList()
 }
 
@@ -985,9 +1023,8 @@ func (m *Model) confirmCategorySelection() {
 
 // startNewCategoryCreation starts the new category creation flow
 func (m *Model) startNewCategoryCreation() {
-	m.textInput.SetValue("")
-	m.textInput.Placeholder = "Enter new category name..."
-	m.textInput.Focus()
+	m.categoryInput.SetValue("")
+	m.categoryInput.Focus()
 	// Stay in StateRemoteCategory but change the UI context
 }
 
@@ -1071,5 +1108,111 @@ func (m *Model) importSingleRepository(repository remote.CuratedRepository) tea.
 	// Return command to start async loading
 	return func() tea.Msg {
 		return RemoteLoadingMsg{}
+	}
+}
+
+// calculateAvailableHeight dynamically calculates available height for lists based on current state
+func (m *Model) calculateAvailableHeight() int {
+	baseReserved := 4 // minimum space for footers and spacing
+	
+	switch m.state {
+	case StateMainMenu:
+		// Account for ASCII header - different sizes for different terminal widths  
+		if m.width < 60 {
+			return m.height - 8 - baseReserved // Simple header is smaller
+		}
+		return m.height - 15 - baseReserved // Full ASCII art header
+	case StateLibrary, StateRemoteBrowse, StateRemoteSelect:
+		return m.height - 6 - baseReserved // Header + footer space
+	case StateRename, StateRemoteURL, StateRemoteRepoDetails, StateRemoteCategory:  
+		return m.height - 10 - baseReserved // More space for input forms
+	case StateHelp:
+		return m.height - 4 - baseReserved // Minimal header for help
+	default:
+		return m.height - 8 - baseReserved // Default conservative estimate
+	}
+}
+
+// validateInput validates input fields and sets validation errors
+func (m *Model) validateInput() bool {
+	m.validationErrors = make(map[string]string) // Clear previous errors
+	isValid := true
+	
+	switch m.state {
+	case StateRename:
+		newName := strings.TrimSpace(m.textInput.Value())
+		if newName == "" {
+			m.validationErrors["name"] = "Name cannot be empty"
+			isValid = false
+		} else if len(newName) > 100 {
+			m.validationErrors["name"] = "Name too long (max 100 characters)"
+			isValid = false
+		}
+		
+	case StateRemoteURL:
+		url := strings.TrimSpace(m.textInput.Value())
+		if url == "" {
+			m.validationErrors["url"] = "URL cannot be empty"
+			isValid = false
+		} else if !strings.Contains(url, "github.") {
+			m.validationErrors["url"] = "Only GitHub URLs are supported"
+			isValid = false
+		}
+		
+	case StateRemoteRepoDetails:
+		description := strings.TrimSpace(m.textInput.Value())
+		if description == "" {
+			m.validationErrors["description"] = "Description cannot be empty"
+			isValid = false
+		} else if len(description) > 500 {
+			m.validationErrors["description"] = "Description too long (max 500 characters)"
+			isValid = false
+		}
+		
+	case StateRemoteCategory:
+		if m.isNewCategory && m.selectedCategoryKey == "new" {
+			categoryName := strings.TrimSpace(m.categoryInput.Value())
+			if categoryName == "" {
+				m.validationErrors["category"] = "Category name cannot be empty"
+				isValid = false
+			} else if len(categoryName) > 50 {
+				m.validationErrors["category"] = "Category name too long (max 50 characters)"
+				isValid = false
+			}
+		}
+	}
+	
+	return isValid
+}
+
+// clearValidationErrors clears all validation errors
+func (m *Model) clearValidationErrors() {
+	m.validationErrors = make(map[string]string)
+}
+
+// setStatus sets a status message with the given type
+func (m *Model) setStatus(message string, statusType StatusType) {
+	m.statusMessage = message
+	m.statusType = statusType
+	m.showStatus = true
+}
+
+// clearStatus clears the current status message
+func (m *Model) clearStatus() {
+	m.statusMessage = ""
+	m.showStatus = false
+}
+
+// getStatusStyle returns the appropriate style for the current status type
+func (m *Model) getStatusStyle() lipgloss.Style {
+	switch m.statusType {
+	case StatusSuccess:
+		return successStyle
+	case StatusError:
+		return dangerStyle
+	case StatusWarning:
+		return warningStyle
+	default:
+		return highlightStyle
 	}
 }
