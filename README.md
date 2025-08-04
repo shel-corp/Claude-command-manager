@@ -1,6 +1,6 @@
 # Claude Command Manager
 
-A standalone command library manager that allows users to enable, disable, and manage custom Claude commands from a centralized library. This tool provides both an interactive TUI interface built with Go and a traditional shell script interface.
+A standalone command library manager that allows users to enable, disable, and manage custom Claude commands from a centralized library. This tool provides a modern interactive TUI interface built with Go, featuring a comprehensive theme system and enhanced repository management capabilities.
 
 <img width="2912" height="1514" alt="image" src="https://github.com/user-attachments/assets/0f46793e-e8bc-476d-8a8e-23e58a7fc961" />
 
@@ -58,14 +58,24 @@ go run cmd/main.go help                     # Show help
 ./command_library.sh help                     # Show help
 ```
 
-## Features
+## ✨ Features
 
+### 🎨 Theme System
+- **6 Built-in Themes**: Default, Monochrome, Solarized, Dracula, Nord, and Gruvbox Material
+- **Adaptive Colors**: Automatically adjusts for light/dark terminal environments
+- **Live Previews**: See theme colors in real-time while browsing
+- **Persistent Settings**: Theme choices save automatically across sessions
+- **Easy Switching**: Navigate Settings → Themes and apply instantly
+
+### 🚀 Core Features
 - **Directory Traversal**: Automatically finds the nearest `.claude` directory from your current location
 - **Interactive Interface**: Professional TUI with arrow keys and single-key actions
 - **Immediate Save**: All changes are saved immediately, no session tracking needed
 - **Symlink Management**: Automatic creation/removal of symlinks to `~/.claude/commands`
 - **Command Renaming**: Rename commands without affecting source files
 - **Status Tracking**: JSON configuration tracks enabled/disabled state and renames
+- **Enhanced Repository Support**: Browse, preview, and import commands from GitHub repositories
+- **Intelligent Caching**: Improved performance with smart caching system
 - **Error Handling**: Comprehensive error handling and broken symlink cleanup
 - **YAML Parsing**: Extracts descriptions from command file frontmatter
 - **Cross-Directory Support**: Works from any subdirectory within a `.claude`-enabled project
@@ -85,11 +95,19 @@ claude_command_manager/
 │   ├── config/
 │   │   ├── config.go             # Configuration management
 │   │   └── paths.go              # Path resolution
+│   ├── theme/                    # Theme system
+│   │   ├── theme.go              # Theme definitions and presets
+│   │   └── manager.go            # Theme management and persistence
+│   ├── remote/                   # Repository management
+│   │   ├── github.go             # GitHub API integration
+│   │   └── parser.go             # Command parsing utilities
+│   ├── cache/                    # Caching system
+│   │   └── manager.go            # Cache management
 │   └── tui/                      # Terminal UI components
-│       ├── model.go              # Bubble Tea model
-│       ├── view.go               # UI rendering
-│       ├── update.go             # Event handling
-│       └── styles.go             # UI styling
+│       ├── model.go              # Bubble Tea model with theme support
+│       ├── view.go               # UI rendering with theme integration
+│       ├── update.go             # Event handling and navigation
+│       └── styles.go             # Theme-aware styling system
 ├── command_library.sh            # Legacy shell script interface
 ├── commands/                     # Example command files
 │   ├── analyze_code.md
@@ -194,17 +212,31 @@ The tool includes comprehensive error handling for:
 ## Example Workflow
 
 1. **Add New Commands**: Place `.md` files in the `commands/` directory 
-2. **Launch Manager**: 
-   - Go version: `go run cmd/main.go` or build and run the binary
-   - Shell version: `./command_library.sh`
-3. **Navigate**: Use ↑/↓ arrow keys or k/j to select commands (Go version)
-4. **Make Changes**:
-   - **Go version**: Changes are saved immediately
-     - Press Enter to toggle enabled/disabled
-     - Press 'r' to rename a command
-     - Press 'l' to toggle symlink location (user vs project)
-   - **Shell version**: Session-based with explicit save
-5. **Exit**: Press 'q' to quit
+2. **Launch Manager**: `go run cmd/main.go` or build and run the binary
+3. **Customize Theme**: Navigate to Settings → Themes to choose your preferred color scheme
+4. **Navigate**: Use ↑/↓ arrow keys to select commands
+5. **Make Changes**: Changes are saved immediately
+   - Press Enter to toggle enabled/disabled
+   - Press 'r' to rename a command
+   - Press 'l' to toggle symlink location (user vs project)
+   - Press 'i' to browse and import from repositories
+6. **Exit**: Press 'q' to quit
+
+### 🎨 Using the Theme System
+
+1. **Access Themes**: From main menu, select "Settings"
+2. **Browse Themes**: Navigate to "Themes" to see all available options
+3. **Preview Live**: Use ↑/↓ to see color previews for each theme
+4. **Apply Theme**: Press Enter on your preferred theme
+5. **Automatic Save**: Your choice persists across all sessions
+
+**Available Themes:**
+- **Default**: Classic blue theme with professional styling
+- **Monochrome**: Elegant grayscale for distraction-free work
+- **Solarized**: Scientifically-designed warm color palette  
+- **Dracula**: Dark theme with vibrant purple and pink accents
+- **Nord**: Arctic-inspired cool blues and pastels
+- **Gruvbox Material**: Warm, earthy colors designed to protect developers' eyes
 
 ## Troubleshooting
 
@@ -220,8 +252,10 @@ The tool includes comprehensive error handling for:
 - [Lipgloss](https://github.com/charmbracelet/lipgloss) for styling
 - [Bubbles](https://github.com/charmbracelet/bubbles) for UI components
 
-**Shell Script Version** uses:
-- Pure shell scripting with `jq` for JSON configuration management
-- Interactive menu system for command management
+The application leverages modern terminal capabilities to provide:
+- Real-time theme switching with adaptive color support
+- Smooth keyboard navigation and responsive UI updates
+- Efficient caching and configuration management
+- Professional-grade error handling and user feedback
 
-Both versions provide the same core functionality with different user interfaces and can be used interchangeably. The Go version offers a more modern TUI experience, while the shell version provides traditional menu-based interaction.
+This creates a polished, feature-rich command management experience that scales from personal use to team environments.
