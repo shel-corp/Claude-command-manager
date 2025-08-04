@@ -35,6 +35,10 @@ const (
 	StateRemoteImport
 	StateRemoteResults
 	StateReportIssue        // Report issue form
+	StateSettings           // Settings menu
+	StateThemeSettings      // Theme picker
+	StateGeneralSettings    // General preferences (future)
+	StateAbout             // About/info screen (future)
 )
 
 // BrowseMode represents the current browsing mode in the repository browser
@@ -62,6 +66,16 @@ const (
 	StatusSuccess
 	StatusError
 	StatusWarning
+)
+
+// SettingsMode represents the current settings submenu
+type SettingsMode int
+
+const (
+	SettingsModeMain SettingsMode = iota // Main settings menu
+	SettingsModeThemes                   // Theme picker
+	SettingsModeGeneral                  // General preferences (future)
+	SettingsModeAbout                    // About screen (future)
 )
 
 // CustomDelegate is a custom list delegate that removes the active line indicator
@@ -237,6 +251,11 @@ type Model struct {
 	searchQuery        string
 	filteredRepos      []remote.CuratedRepository
 	browseSelected     map[int]bool
+	
+	// Settings state
+	settingsMode       SettingsMode       // Current settings submenu
+	selectedThemeIndex int                // Selected theme in theme picker
+	themePreviewing    bool               // Whether currently previewing theme
 }
 
 // commandItem implements list.Item for the Bubbles list component
@@ -480,7 +499,15 @@ func NewModel(commandManager *commands.Manager, configManager *config.Manager, u
 		availableCategories: make(map[string]string),
 		customRepoInput:     registry.RepositoryInput{},
 		validationErrors:    make(map[string]string),
+		
+		// Settings initialization
+		settingsMode:       SettingsModeMain,
+		selectedThemeIndex: 0,
+		themePreviewing:    false,
 	}
+
+	// Initialize theme manager for TUI
+	InitializeThemeManager()
 
 	// Load commands
 	if err := model.RefreshCommands(); err != nil {
@@ -513,6 +540,12 @@ func (m *Model) initMainMenu() {
 			description: "Browse and import repository commands",
 			icon:        "",
 			action:      "import",
+		},
+		menuItem{
+			title:       "Settings",
+			description: "Configure themes and preferences",
+			icon:        "",
+			action:      "settings",
 		},
 		menuItem{
 			title:       "Request feature or report issue",
@@ -764,6 +797,20 @@ func (m *Model) StartReportIssue() {
 	
 	// Clear validation errors
 	m.clearValidationErrors()
+}
+
+// StartSettings initiates the settings menu flow
+func (m *Model) StartSettings() {
+	m.state = StateSettings
+	m.settingsMode = SettingsModeMain
+	m.initSettingsMenu()
+}
+
+// StartThemeSettings initiates the theme picker
+func (m *Model) StartThemeSettings() {
+	m.state = StateThemeSettings
+	m.settingsMode = SettingsModeThemes
+	m.initThemePickerMenu()
 }
 
 // Remote import methods
@@ -1482,4 +1529,81 @@ func (m *Model) SetRemoteCommands(commands []remote.RemoteCommand) {
 	m.remoteSelected = make(map[int]bool)
 	m.state = StateRemoteSelect
 	m.updateRemoteCommandList()
+}
+
+// Settings menu methods
+
+// initSettingsMenu initializes the main settings menu
+func (m *Model) initSettingsMenu() {
+	items := []list.Item{
+		menuItem{
+			title:       "Themes",
+			description: "Choose your preferred color theme",
+			icon:        "🎨",
+			action:      "themes",
+		},
+		menuItem{
+			title:       "General",
+			description: "General preferences and options",
+			icon:        "⚙️",
+			action:      "general",
+		},
+		menuItem{
+			title:       "About",
+			description: "Version info and credits",
+			icon:        "ℹ️",
+			action:      "about",
+		},
+	}
+	
+	m.list.SetItems(items)
+}
+
+// initThemePickerMenu initializes the theme picker menu
+func (m *Model) initThemePickerMenu() {
+	themeManager := GetThemeManager()
+	themes := themeManager.GetAvailableThemes()
+	
+	items := make([]list.Item, len(themes))
+	for i, theme := range themes {
+		// Mark current theme as selected
+		isActive := themeManager.IsThemeActive(theme.ID)
+		activeIndicator := ""
+		if isActive {
+			activeIndicator = "✓ "
+			m.selectedThemeIndex = i
+		}
+		
+		items[i] = menuItem{
+			title:       activeIndicator + theme.Name,
+			description: theme.Description,
+			icon:        "", // Theme preview will be shown differently
+			action:      theme.ID,
+		}
+	}
+	
+	m.list.SetItems(items)
+}
+
+// ApplySelectedTheme applies the currently selected theme
+func (m *Model) ApplySelectedTheme() error {
+	themeManager := GetThemeManager()
+	themes := themeManager.GetAvailableThemes()
+	
+	selectedIndex := m.list.Index()
+	if selectedIndex < 0 || selectedIndex >= len(themes) {
+		return fmt.Errorf("invalid theme index")
+	}
+	
+	selectedTheme := themes[selectedIndex]
+	
+	// Apply theme
+	if err := themeManager.SetTheme(selectedTheme.ID); err != nil {
+		return fmt.Errorf("failed to apply theme: %w", err)
+	}
+	
+	// Refresh UI styles
+	RefreshStyles()
+	
+	return nil
 }

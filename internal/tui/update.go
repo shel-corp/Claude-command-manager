@@ -178,6 +178,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.issueBodyInput, cmd = m.issueBodyInput.Update(msg)
 			cmds = append(cmds, cmd)
 		}
+		
+	case StateSettings:
+		m.list, cmd = m.list.Update(msg)
+		cmds = append(cmds, cmd)
+		
+	case StateThemeSettings:
+		m.list, cmd = m.list.Update(msg)
+		cmds = append(cmds, cmd)
 	}
 
 	return m, tea.Batch(cmds...)
@@ -210,6 +218,10 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleRemoteResultsStateKeys(msg)
 	case StateReportIssue:
 		return m.handleReportIssueStateKeys(msg)
+	case StateSettings:
+		return m.handleSettingsStateKeys(msg)
+	case StateThemeSettings:
+		return m.handleThemeSettingsStateKeys(msg)
 	}
 	
 	return m, nil
@@ -259,6 +271,9 @@ func (m *Model) executeSelectedMenuItem() (tea.Model, tea.Cmd) {
 		}
 	case "import":
 		m.StartRemoteImport()
+		return m, nil
+	case "settings":
+		m.StartSettings()
 		return m, nil
 	case "report_issue":
 		m.StartReportIssue()
@@ -932,4 +947,83 @@ func (m *Model) handleReportIssueStateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 		m.issueBodyInput, cmd = m.issueBodyInput.Update(msg)
 		return m, cmd
 	}
+}
+
+// handleSettingsStateKeys handles keys in the main settings state
+func (m *Model) handleSettingsStateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c", "q":
+		return m, m.Quit()
+		
+	case "esc":
+		m.state = StateMainMenu
+		m.initMainMenu()
+		return m, nil
+		
+	case "enter":
+		return m.executeSelectedSettingsMenuItem()
+		
+	case "h", "?":
+		m.state = StateHelp
+		return m, nil
+	}
+	
+	// Let the list handle other keys (navigation)
+	var cmd tea.Cmd
+	m.list, cmd = m.list.Update(msg)
+	return m, cmd
+}
+
+// handleThemeSettingsStateKeys handles keys in the theme settings state
+func (m *Model) handleThemeSettingsStateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c", "q":
+		return m, m.Quit()
+		
+	case "esc":
+		m.state = StateSettings
+		m.initSettingsMenu()
+		return m, nil
+		
+	case "enter":
+		if err := m.ApplySelectedTheme(); err != nil {
+			m.setStatus("Failed to apply theme: "+err.Error(), StatusError)
+		} else {
+			m.setStatus("Theme applied successfully", StatusSuccess)
+		}
+		return m, nil
+		
+	case "p":
+		// Preview theme (already shows in the view)
+		return m, nil
+	}
+	
+	// Let the list handle other keys (navigation)
+	var cmd tea.Cmd
+	m.list, cmd = m.list.Update(msg)
+	return m, cmd
+}
+
+// executeSelectedSettingsMenuItem executes the action for the selected settings menu item
+func (m *Model) executeSelectedSettingsMenuItem() (tea.Model, tea.Cmd) {
+	selectedItem := m.GetSelectedMenuItem()
+	if selectedItem == nil {
+		return m, nil
+	}
+	
+	switch selectedItem.action {
+	case "themes":
+		m.StartThemeSettings()
+		return m, nil
+	case "general":
+		// TODO: Implement general settings
+		m.setStatus("General settings not yet implemented", StatusWarning)
+		return m, nil
+	case "about":
+		// TODO: Implement about dialog
+		m.setStatus("About dialog not yet implemented", StatusWarning)
+		return m, nil
+	}
+	
+	return m, nil
 }

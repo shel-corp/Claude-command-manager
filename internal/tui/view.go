@@ -66,6 +66,12 @@ func (m *Model) View() string {
 	case StateReportIssue:
 		stateStr = "ReportIssue"
 		return m.reportIssueView()
+	case StateSettings:
+		stateStr = "Settings"
+		return m.settingsView()
+	case StateThemeSettings:
+		stateStr = "ThemeSettings"
+		return m.themeSettingsView()
 	}
 
 	// Fallback with debug info
@@ -87,7 +93,7 @@ func (m *Model) mainMenuView() string {
 
 
 
-██████╗██╗      █████╗ ██╗   ██╗██████╗ ███████╗
+ ██████╗██╗      █████╗ ██╗   ██╗██████╗ ███████╗
 ██╔════╝██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝
 ██║     ██║     ███████║██║   ██║██║  ██║█████╗  
 ██║     ██║     ██╔══██║██║   ██║██║  ██║██╔══╝  
@@ -747,6 +753,54 @@ func (m *Model) reportIssueView() string {
 	}
 	
 	footer := "Tab: Switch Field • Enter: Submit • Esc: Cancel • Ctrl+C: Quit"
+	
+	return centerView(header, content.String(), footer, m.width)
+}
+
+// settingsView renders the main settings menu
+func (m *Model) settingsView() string {
+	header := "⚙️ Settings"
+	
+	var content strings.Builder
+	content.WriteString(subtleStyle.Render("Configure themes and preferences:"))
+	content.WriteString("\n\n")
+	content.WriteString(m.list.View())
+	
+	footer := "Enter: Select • Esc: Back to Main Menu • q: Quit • h: Help"
+	
+	return centerView(header, content.String(), footer, m.width)
+}
+
+// themeSettingsView renders the theme picker
+func (m *Model) themeSettingsView() string {
+	header := "🎨 Choose Theme"
+	
+	var content strings.Builder
+	content.WriteString(subtleStyle.Render("Select a theme to customize your experience:"))
+	content.WriteString("\n\n")
+	
+	// Show current theme info
+	themeManager := GetThemeManager()
+	currentTheme := themeManager.GetCurrentTheme()
+	content.WriteString(fmt.Sprintf("Current: %s\n", highlightStyle.Render(currentTheme.Name)))
+	content.WriteString(fmt.Sprintf("%s\n\n", subtleStyle.Render(currentTheme.Description)))
+	
+	// Theme list
+	content.WriteString(m.list.View())
+	
+	// Show theme preview if available
+	if len(themeManager.GetAvailableThemes()) > 0 {
+		themes := themeManager.GetAvailableThemes()
+		selectedIndex := m.list.Index()
+		if selectedIndex >= 0 && selectedIndex < len(themes) {
+			selectedTheme := themes[selectedIndex]
+			preview := selectedTheme.GeneratePreview()
+			content.WriteString("\n")
+			content.WriteString("Preview: " + preview.ColorBar)
+		}
+	}
+	
+	footer := "Enter: Apply Theme • p: Preview • Esc: Back to Settings • q: Quit"
 	
 	return centerView(header, content.String(), footer, m.width)
 }
