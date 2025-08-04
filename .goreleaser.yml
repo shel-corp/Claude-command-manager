@@ -98,9 +98,9 @@ brews:
       name: homebrew-claude
       branch: main
       token: "{{ .Env.GITHUB_TOKEN }}"
-    
-    # Folder inside the repository
-    folder: Formula
+      
+    # Directory for formula (use directory instead of folder)
+    directory: Formula
     
     # Caveats to display after installation
     caveats: |
