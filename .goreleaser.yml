@@ -94,8 +94,8 @@ brews:
     
     # Repository for the tap
     repository:
-      owner: sheltontolbert
-      name: homebrew-claude-tools
+      owner: shel-corp
+      name: homebrew-claude
       branch: main
       token: "{{ .Env.GITHUB_TOKEN }}"
     
@@ -131,8 +131,8 @@ brews:
 
 release:
   github:
-    owner: sheltontolbert
-    name: claude_command_manager
+    owner: shel-corp
+    name: Claude-command-manager
   draft: false
   prerelease: auto
   mode: replace
@@ -145,7 +145,7 @@ release:
     
     #### Homebrew (macOS/Linux)
     ```bash
-    brew tap sheltontolbert/claude-tools
+    brew tap shel-corp/claude
     brew install ccm
     ```
     

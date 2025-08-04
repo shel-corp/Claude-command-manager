@@ -16,7 +16,7 @@ NC='\033[0m' # No Color
 REPO_URL="https://github.com/shel-corp/Claude-command-manager"
 FORMULA_FILE="Formula/ccm.rb"
 TAP_REPO="homebrew-claude"
-TAP_OWNER="shelton-tolbert"
+TAP_OWNER="shel-corp"
 
 # Helper functions
 log_info() {
@@ -337,7 +337,17 @@ main() {
     log_info "Waiting for GitHub to process the new tag..."
     sleep 10
     
-    local sha256=$(calculate_sha256 "$version")
+    # Capture SHA256 calculation with explicit output handling
+    local sha256
+    sha256=$(calculate_sha256 "$version" 2>/dev/null)
+    if [ -z "$sha256" ]; then
+        log_error "Failed to get SHA256 from calculate_sha256 function"
+        exit 1
+    fi
+    
+    # Debug: ensure SHA256 is clean
+    sha256=$(echo -n "$sha256" | tr -d '\n\r' | tr -d '[:cntrl:]')
+    
     update_formula "$version" "$sha256"
     test_formula
     
