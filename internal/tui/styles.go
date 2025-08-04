@@ -19,7 +19,7 @@ func InitializeThemeManager() {
 	
 	// Get config path for theme settings
 	homeDir, _ := os.UserHomeDir()
-	themeConfigPath := filepath.Join(homeDir, ".claude", "theme.json")
+	themeConfigPath := filepath.Join(homeDir, ".config", "claude_command_manager", "config.json")
 	
 	themeManager = theme.NewManager(themeConfigPath)
 	

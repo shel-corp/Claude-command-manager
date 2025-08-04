@@ -10,11 +10,22 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Settings represents theme-related configuration
-type Settings struct {
+// AppConfig represents the main application configuration
+type AppConfig struct {
+	Theme ThemeSettings `json:"theme"`
+	// Future: Other settings can be added here
+	// UI      UISettings      `json:"ui"`
+	// Cache   CacheSettings   `json:"cache"`
+}
+
+// ThemeSettings represents theme-related configuration
+type ThemeSettings struct {
 	CurrentTheme string `json:"current_theme"`
 	AutoDetect   bool   `json:"auto_detect"` // Auto-detect light/dark based on terminal
 }
+
+// Settings is an alias for ThemeSettings to maintain backward compatibility
+type Settings = ThemeSettings
 
 // Manager handles theme state and persistence
 type Manager struct {
@@ -23,6 +34,7 @@ type Manager struct {
 	settings     Settings
 	configPath   string
 	styles       *Styles // Cached theme-aware styles
+	appConfig    *AppConfig // Full app configuration
 }
 
 // Styles holds all theme-aware style functions
@@ -68,10 +80,15 @@ func NewManager(configPath string) *Manager {
 		AutoDetect:   true,
 	}
 
+	appConfig := &AppConfig{
+		Theme: settings,
+	}
+
 	manager := &Manager{
 		currentTheme: DefaultTheme,
 		settings:     settings,
 		configPath:   configPath,
+		appConfig:    appConfig,
 	}
 
 	// Generate initial styles
@@ -101,8 +118,21 @@ func (m *Manager) Load() error {
 		return m.save()
 	}
 
-	if err := json.Unmarshal(data, &m.settings); err != nil {
-		return fmt.Errorf("failed to parse theme config: %w", err)
+	// Try to load as new unified config format first
+	var appConfig AppConfig
+	if err := json.Unmarshal(data, &appConfig); err == nil && appConfig.Theme.CurrentTheme != "" {
+		// Successfully loaded unified config
+		m.appConfig = &appConfig
+		m.settings = appConfig.Theme
+	} else {
+		// Fallback: try to load as legacy theme-only config
+		var legacySettings Settings
+		if err := json.Unmarshal(data, &legacySettings); err != nil {
+			return fmt.Errorf("failed to parse theme config: %w", err)
+		}
+		// Migrate legacy config to unified format
+		m.settings = legacySettings
+		m.appConfig = &AppConfig{Theme: legacySettings}
 	}
 
 	// Apply the loaded theme
@@ -123,7 +153,14 @@ func (m *Manager) save() error {
 		return fmt.Errorf("failed to create theme config directory: %w", err)
 	}
 
-	data, err := json.MarshalIndent(m.settings, "", "  ")
+	// Update app config with current settings
+	if m.appConfig == nil {
+		m.appConfig = &AppConfig{Theme: m.settings}
+	} else {
+		m.appConfig.Theme = m.settings
+	}
+
+	data, err := json.MarshalIndent(m.appConfig, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal theme config: %w", err)
 	}

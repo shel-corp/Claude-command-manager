@@ -23,7 +23,9 @@
       "Bash(gh label:*)",
       "Bash(timeout:*)",
       "Bash(./ccm help)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(brew unlink:*)",
+      "Bash(true)"
     ],
     "deny": []
   }
