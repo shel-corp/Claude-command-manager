@@ -30,6 +30,7 @@ const (
 	StateRemoteCategory     // Category selection
 	StateRemoteLoading
 	StateRemoteSelect
+	StateRemotePreview      // Command preview
 	StateRemoteImport
 	StateRemoteResults
 )
@@ -100,6 +101,10 @@ type Model struct {
 	remoteConflicts []remote.RemoteCommand
 	remoteOptions   remote.ImportOptions
 	remoteResult    *remote.ImportResult
+	
+	// Preview state
+	previewCommand  *remote.RemoteCommand
+	previousState   State  // State to return to after preview
 	
 	// Custom repository input state
 	customRepoInput     registry.RepositoryInput
@@ -1215,4 +1220,40 @@ func (m *Model) getStatusStyle() lipgloss.Style {
 	default:
 		return highlightStyle
 	}
+}
+
+// StartPreview enters preview mode for the selected command
+func (m *Model) StartPreview() {
+	if m.state != StateRemoteSelect {
+		return
+	}
+	
+	index := m.list.Index()
+	if index < 0 || index >= len(m.remoteCommands) {
+		return
+	}
+	
+	// Store the command to preview and the previous state
+	m.previewCommand = &m.remoteCommands[index]
+	m.previousState = m.state
+	m.state = StateRemotePreview
+}
+
+// ExitPreview returns to the previous state from preview mode
+func (m *Model) ExitPreview() {
+	if m.state != StateRemotePreview {
+		return
+	}
+	
+	// Return to the previous state
+	m.state = m.previousState
+	m.previewCommand = nil
+}
+
+// SetRemoteCommands sets the remote commands for testing purposes
+func (m *Model) SetRemoteCommands(commands []remote.RemoteCommand) {
+	m.remoteCommands = commands
+	m.remoteSelected = make(map[int]bool)
+	m.state = StateRemoteSelect
+	m.updateRemoteCommandList()
 }

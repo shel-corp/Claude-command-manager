@@ -5,6 +5,14 @@ import (
 	"strings"
 )
 
+// min returns the smaller of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // View renders the application UI
 func (m *Model) View() string {
 	if m.quitting {
@@ -44,6 +52,9 @@ func (m *Model) View() string {
 	case StateRemoteSelect:
 		stateStr = "RemoteSelect"
 		return m.remoteSelectView()
+	case StateRemotePreview:
+		stateStr = "RemotePreview"
+		return m.remotePreviewView()
 	case StateRemoteImport:
 		stateStr = "RemoteImport"
 		return m.remoteImportView()
@@ -173,6 +184,7 @@ func (m *Model) helpView() string {
 		{"c", "Enter custom GitHub URL"},
 		{"a", "Select all repositories"},
 		{"n", "Select none"},
+		{"p", "Preview selected command"},
 		{"Space", "Toggle repository selection"},
 		{"Tab", "Switch between search and results"},
 		{"Esc", "Go back or cancel"},
@@ -414,7 +426,7 @@ func (m *Model) remoteSelectView() string {
 	// Command list
 	content.WriteString(m.list.View())
 
-	footer := "Enter: Toggle • a: Select All • n: Select None • i: Import • Esc: Cancel"
+	footer := "Enter: Toggle • p: Preview • a: Select All • n: Select None • i: Import • Esc: Cancel"
 	
 	return centerView(header, content.String(), footer, m.width)
 }
@@ -441,6 +453,60 @@ func (m *Model) remoteImportView() string {
 	content.WriteString(subtleStyle.Render("Please wait..."))
 
 	footer := ""
+	
+	return centerView(header, content.String(), footer, m.width)
+}
+
+// remotePreviewView renders the command preview view
+func (m *Model) remotePreviewView() string {
+	if m.previewCommand == nil {
+		return "No command to preview"
+	}
+	
+	header := fmt.Sprintf("📄 Preview: %s", m.previewCommand.Name)
+	
+	var content strings.Builder
+	
+	// Command metadata
+	content.WriteString(fmt.Sprintf("Name: %s\n", highlightStyle.Render(m.previewCommand.Name)))
+	content.WriteString(fmt.Sprintf("Path: %s\n", subtleStyle.Render(m.previewCommand.Path)))
+	content.WriteString(fmt.Sprintf("Description: %s\n", m.previewCommand.Description))
+	if m.previewCommand.LocalExists {
+		content.WriteString(warningStyle.Render("⚠️  A local command with this name already exists"))
+		content.WriteString("\n")
+	}
+	content.WriteString("\n")
+	
+	// Content divider
+	content.WriteString(strings.Repeat("─", min(m.width-4, 80)))
+	content.WriteString("\n\n")
+	
+	// Command content
+	if m.previewCommand.Content != "" {
+		// Split content into lines and limit display height
+		lines := strings.Split(m.previewCommand.Content, "\n")
+		maxLines := m.height - 12 // Reserve space for header, metadata, and footer
+		if maxLines < 5 {
+			maxLines = 5
+		}
+		
+		displayLines := lines
+		if len(lines) > maxLines {
+			displayLines = lines[:maxLines]
+			// Add truncation indicator
+			displayLines = append(displayLines, subtleStyle.Render("... (content truncated)"))
+		}
+		
+		for _, line := range displayLines {
+			content.WriteString(line)
+			content.WriteString("\n")
+		}
+	} else {
+		content.WriteString(subtleStyle.Render("Content not loaded"))
+		content.WriteString("\n")
+	}
+	
+	footer := "p/Esc: Back • Ctrl+C: Quit"
 	
 	return centerView(header, content.String(), footer, m.width)
 }

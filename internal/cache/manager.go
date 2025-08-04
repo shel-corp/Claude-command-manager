@@ -283,7 +283,7 @@ func (m *Manager) GetRepositoryCacheRaw(repoKey string) ([]byte, []byte, time.Ti
 }
 
 // SetRepositoryCache stores repository data in cache
-func (m *Manager) SetRepositoryCache(repoKey string, repo remote.RemoteRepository, commands []remote.RemoteCommand, etag string) error {
+func (m *Manager) SetRepositoryCache(repoKey string, repo interface{}, commands interface{}, etag string) error {
 	if !m.IsEnabled() {
 		return nil // Silently skip if disabled
 	}
@@ -293,15 +293,51 @@ func (m *Manager) SetRepositoryCache(repoKey string, repo remote.RemoteRepositor
 
 	now := time.Now()
 	
+	// Convert interface{} types to concrete types
+	var repoData remote.RemoteRepository
+	var commandsData []remote.RemoteCommand
+	
+	// Convert repo interface{} to RemoteRepository
+	switch r := repo.(type) {
+	case remote.RemoteRepository:
+		repoData = r
+	case *remote.RemoteRepository:
+		repoData = *r
+	default:
+		// Try to marshal/unmarshal to convert
+		data, err := json.Marshal(repo)
+		if err != nil {
+			return fmt.Errorf("failed to marshal repository for caching: %w", err)
+		}
+		if err := json.Unmarshal(data, &repoData); err != nil {
+			return fmt.Errorf("failed to unmarshal repository for caching: %w", err)
+		}
+	}
+	
+	// Convert commands interface{} to []RemoteCommand
+	switch c := commands.(type) {
+	case []remote.RemoteCommand:
+		commandsData = c
+	default:
+		// Try to marshal/unmarshal to convert
+		data, err := json.Marshal(commands)
+		if err != nil {
+			return fmt.Errorf("failed to marshal commands for caching: %w", err)
+		}
+		if err := json.Unmarshal(data, &commandsData); err != nil {
+			return fmt.Errorf("failed to unmarshal commands for caching: %w", err)
+		}
+	}
+	
 	// Calculate size of cached data
 	size := int64(0)
-	for _, cmd := range commands {
+	for _, cmd := range commandsData {
 		size += int64(len(cmd.Content))
 	}
 
 	repoCache := RepositoryCache{
-		Repository:  repo,
-		Commands:    commands,
+		Repository:  repoData,
+		Commands:    commandsData,
 		CachedAt:    now,
 		ExpiresAt:   now.Add(time.Duration(m.config.TTLHours) * time.Hour),
 		ETag:        etag,

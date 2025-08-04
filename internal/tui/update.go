@@ -150,6 +150,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.list, cmd = m.list.Update(msg)
 		cmds = append(cmds, cmd)
 		
+	case StateRemotePreview:
+		// No input handling in preview mode (handled by key handlers)
+		
 	case StateRemoteLoading, StateRemoteImport:
 		// No input handling during loading/import states
 		
@@ -181,6 +184,8 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleRemoteCategoryStateKeys(msg)
 	case StateRemoteSelect:
 		return m.handleRemoteSelectStateKeys(msg)
+	case StateRemotePreview:
+		return m.handleRemotePreviewStateKeys(msg)
 	case StateRemoteResults:
 		return m.handleRemoteResultsStateKeys(msg)
 	}
@@ -633,6 +638,10 @@ func (m *Model) handleRemoteSelectStateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd)
 		m.ToggleRemoteCommand()
 		return m, nil
 		
+	case "p":
+		m.StartPreview()
+		return m, nil
+		
 	case "a":
 		m.SelectAllRemoteCommands(true)
 		return m, nil
@@ -657,6 +666,19 @@ func (m *Model) handleRemoteSelectStateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd)
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
 	return m, cmd
+}
+
+func (m *Model) handleRemotePreviewStateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "p", "q":
+		m.ExitPreview()
+		return m, nil
+		
+	case "ctrl+c":
+		return m, m.Quit()
+	}
+	
+	return m, nil
 }
 
 func (m *Model) handleRemoteResultsStateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

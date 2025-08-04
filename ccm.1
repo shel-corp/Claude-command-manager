@@ -1,0 +1,230 @@
+.TH CCM 1 "December 2024" "ccm 1.0" "User Commands"
+.SH NAME
+ccm \- Claude Command Manager - TUI for managing Claude Code custom commands
+.SH SYNOPSIS
+.B ccm
+[\fICOMMAND\fR] [\fIOPTIONS\fR]
+.SH DESCRIPTION
+.B ccm
+(Claude Command Manager) is a terminal user interface (TUI) application for managing custom commands in Claude Code. It provides both an interactive interface and command-line tools for enabling, disabling, renaming, and importing commands from GitHub repositories.
+
+Commands are stored as Markdown files with YAML frontmatter in the 
+.I .claude/commands
+directory. Enabled commands are symlinked to the appropriate locations for Claude Code to discover and use them.
+
+.SH USAGE
+When run without arguments, 
+.B ccm
+launches an interactive TUI for managing commands. The following command-line options are also available:
+
+.SH COMMANDS
+.TP
+.B ccm
+Launch interactive TUI (default behavior)
+.TP
+.B ccm list
+List all available commands with their status
+.TP
+.B ccm status
+Show current command status with summary
+.TP
+.B ccm enable \fICOMMAND_NAME\fR
+Enable a specific command
+.TP
+.B ccm disable \fICOMMAND_NAME\fR
+Disable a specific command
+.TP
+.B ccm rename \fICOMMAND_NAME\fR \fINEW_NAME\fR
+Rename a command
+.TP
+.B ccm import \fIGITHUB_URL\fR
+Import commands from a GitHub repository interactively
+.TP
+.B ccm browse \fIGITHUB_URL\fR
+Browse available commands in a GitHub repository without importing
+.TP
+.B ccm help
+Show usage information
+.TP
+.B ccm \-h, \-\-help
+Show usage information
+
+.SH INTERACTIVE MODE
+In the interactive TUI mode, the following keyboard shortcuts are available:
+
+.SS Navigation
+.TP
+.B ↑/↓, j/k
+Navigate up/down through the command list
+.TP
+.B Enter, t
+Toggle the selected command enabled/disabled
+.TP
+.B r
+Rename the selected command
+.TP
+.B l
+Toggle symlink location between user (~/.claude/commands) and project (.claude/commands)
+.TP
+.B i
+Import commands from a GitHub repository
+.TP
+.B h, ?
+Show help screen
+.TP
+.B q, Ctrl+C
+Quit the application
+
+.SS Import Mode
+When importing commands from GitHub:
+.TP
+.B Enter
+Confirm URL input or toggle command selection
+.TP
+.B a
+Select all commands for import
+.TP
+.B n
+Select no commands (clear all selections)
+.TP
+.B i
+Start importing selected commands
+.TP
+.B Esc
+Cancel and return to previous screen
+
+.SH GITHUB IMPORT
+.B ccm
+supports importing commands from GitHub repositories. The following URL formats are supported:
+
+.TP
+.B https://github.com/owner/repo
+Imports from .claude/commands directory on main branch
+.TP
+.B https://github.com/owner/repo/tree/branch/.claude/commands
+Imports from specified branch and path
+.TP
+.B github.com/owner/repo/commands
+Short format, assumes https:// and main branch
+
+The import process:
+.IP 1. 4
+Validates the repository and checks accessibility
+.IP 2. 4
+Scans for .md files in the commands directory
+.IP 3. 4
+Loads command metadata and descriptions
+.IP 4. 4
+Checks for conflicts with existing local commands
+.IP 5. 4
+Presents an interactive selection interface
+.IP 6. 4
+Imports selected commands with conflict resolution
+
+.SH FILES
+.TP
+.I .claude/commands/
+Project-specific command directory
+.TP
+.I ~/.claude/commands/
+User-global command directory (symlink target)
+.TP
+.I .claude/command_library/
+Local storage for imported commands
+.TP
+.I .claude/config.json
+Configuration file storing command states and preferences
+
+.SH COMMAND FORMAT
+Commands are stored as Markdown files with optional YAML frontmatter:
+
+.nf
+---
+description: "Brief description of the command"
+author: "Command author"
+version: "1.0"
+---
+
+# Command Name
+
+Command content goes here...
+.fi
+
+.SH DEPENDENCIES
+.B ccm
+requires the following external tools:
+.TP
+.B gh
+GitHub CLI for repository access (https://cli.github.com/)
+.TP
+.B tput
+Terminal capability tool (usually pre-installed)
+.TP
+.B curl
+HTTP client for file downloads (fallback, usually pre-installed)
+
+.SH EXAMPLES
+.TP
+Launch interactive mode:
+.B ccm
+
+.TP
+List all commands:
+.B ccm list
+
+.TP
+Enable a specific command:
+.B ccm enable my-command
+
+.TP
+Import from a GitHub repository:
+.B ccm import https://github.com/user/claude-commands
+
+.TP
+Browse repository without importing:
+.B ccm browse github.com/user/claude-commands/.claude/commands
+
+.TP
+Rename a command:
+.B ccm rename old-name new-name
+
+.SH EXIT STATUS
+.B ccm
+exits with status 0 on success, and >0 if an error occurs.
+
+.SH ENVIRONMENT
+.TP
+.B HOME
+Used to locate the user's home directory for global command storage
+
+.SH SECURITY
+.B ccm
+performs basic security validation on imported commands, checking for potentially malicious patterns such as:
+.IP \(bu 4
+Remote code execution patterns (curl/wget | sh)
+.IP \(bu 4
+Dangerous file operations (rm -rf /)
+.IP \(bu 4
+Privileged operations (sudo rm)
+.IP \(bu 4
+Fork bombs and other suspicious constructs
+
+Commands that fail security validation will not be imported.
+
+.SH BUGS
+Report bugs and issues at: https://github.com/shel-corp/Claude-command-manager/issues
+
+.SH AUTHOR
+Written by Shelton Tolbert.
+
+.SH COPYRIGHT
+Copyright © 2024 shelcorp. All rights reserved.
+
+This is free software; you are free to change and redistribute it under the terms of the MIT License.
+
+.SH SEE ALSO
+.BR claude (1),
+.BR gh (1),
+.BR git (1)
+
+Claude Code documentation: https://docs.anthropic.com/en/docs/claude-code
