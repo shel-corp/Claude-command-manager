@@ -1,8 +1,8 @@
 # Claude Command Manager
-<img width="2912" height="1514" alt="image" src="https://github.com/user-attachments/assets/0f46793e-e8bc-476d-8a8e-23e58a7fc961" />
-
 
 A standalone command library manager that allows users to enable, disable, and manage custom Claude commands from a centralized library. This tool provides both an interactive TUI interface built with Go and a traditional shell script interface.
+
+<img width="2912" height="1514" alt="image" src="https://github.com/user-attachments/assets/0f46793e-e8bc-476d-8a8e-23e58a7fc961" />
 
 ## Overview
 
