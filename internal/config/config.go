@@ -21,6 +21,7 @@ type CommandConfig struct {
 	OriginalName    string          `json:"original_name"`
 	DisplayName     string          `json:"display_name"`
 	SourcePath      string          `json:"source_path"`
+	RelativePath    string          `json:"relative_path"`
 	SymlinkLocation SymlinkLocation `json:"symlink_location"`
 }
 

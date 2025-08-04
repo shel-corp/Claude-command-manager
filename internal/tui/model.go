@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	
 	"github.com/charmbracelet/bubbles/list"
@@ -33,6 +34,7 @@ const (
 	StateRemotePreview      // Command preview
 	StateRemoteImport
 	StateRemoteResults
+	StateReportIssue        // Report issue form
 )
 
 // BrowseMode represents the current browsing mode in the repository browser
@@ -62,6 +64,107 @@ const (
 	StatusWarning
 )
 
+// CustomDelegate is a custom list delegate that removes the active line indicator
+type CustomDelegate struct {
+	list.DefaultDelegate
+}
+
+// NewCustomDelegate creates a new custom delegate
+func NewCustomDelegate() CustomDelegate {
+	d := CustomDelegate{
+		DefaultDelegate: list.NewDefaultDelegate(),
+	}
+	return d
+}
+
+// Render renders the list item with elegant styling and spacing
+func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	var str string
+	
+	// Check if this item is selected
+	isSelected := index == m.Index()
+	
+	// Get the item content
+	title := item.(interface{ Title() string }).Title()
+	desc := item.(interface{ Description() string }).Description()
+	
+	// Calculate content width (leave margins for centering)
+	contentWidth := m.Width() - 20 // Leave space for margins
+	if contentWidth < 40 {
+		contentWidth = 40
+	}
+	
+	if isSelected {
+		// Selected item with elegant card-like appearance
+		cardStyle := lipgloss.NewStyle().
+			Width(contentWidth).
+			Align(lipgloss.Center).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(primaryColor).
+			Background(lipgloss.Color("#1E293B")).
+			Padding(0, 2).  // Reduced from (1, 3) to save vertical space 
+			Margin(0, 0)    // Reduced from (1, 0) to save vertical space
+		
+		titleStyle := lipgloss.NewStyle().
+			Foreground(primaryColor).
+			Bold(true).
+			Align(lipgloss.Center)
+		
+		descStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#CBD5E1")).
+			Italic(true).
+			Align(lipgloss.Center)
+		
+		content := titleStyle.Render(title)
+		if desc != "" {
+			content += "\n" + descStyle.Render(desc)
+		}
+		
+		card := cardStyle.Render(content)
+		
+		// Center the entire card
+		centerStyle := lipgloss.NewStyle().
+			Width(m.Width()).
+			Align(lipgloss.Center)
+		
+		str = centerStyle.Render(card) + "\n" // Add spacing after selected card
+		
+	} else {
+		// Unselected item with subtle styling
+		itemStyle := lipgloss.NewStyle().
+			Width(contentWidth).
+			Align(lipgloss.Center).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#374151")).
+			Padding(0, 2).  // Reduced from (1, 3) to save vertical space
+			Margin(0, 0)    // Reduced from (1, 0) to save vertical space
+		
+		titleStyle := lipgloss.NewStyle().
+			Foreground(textColor).
+			Align(lipgloss.Center)
+		
+		descStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#9CA3AF")).
+			Align(lipgloss.Center)
+		
+		content := titleStyle.Render(title)
+		if desc != "" {
+			content += "\n" + descStyle.Render(desc)
+		}
+		
+		item := itemStyle.Render(content)
+		
+		// Center the entire item
+		centerStyle := lipgloss.NewStyle().
+			Width(m.Width()).
+			Align(lipgloss.Center)
+		
+		str = centerStyle.Render(item) + "\n" // Add spacing after unselected card
+	}
+	
+	fmt.Fprint(w, str)
+}
+
 // Model represents the application state for Bubble Tea
 type Model struct {
 	// Core components - separate instances for different contexts
@@ -69,6 +172,8 @@ type Model struct {
 	textInput      textinput.Model   // Primary text input
 	searchInput    textinput.Model   // Dedicated search input
 	categoryInput  textinput.Model   // Category creation input
+	issueTitleInput textinput.Model  // Issue title input
+	issueBodyInput  textinput.Model  // Issue body input
 	
 	// Managers
 	commandManager     *commands.Manager
@@ -119,6 +224,11 @@ type Model struct {
 	statusMessage       string             // Status message to display
 	statusType          StatusType         // Type of status (info, success, error)
 	showStatus          bool               // Whether to show status message
+	
+	// Report issue state
+	issueCurrentField   int                // Current field in report issue form (0=title, 1=body)
+	issueSubmitting     bool               // Whether currently submitting issue
+	issueSubmitError    string             // Error from issue submission
 	
 	// Repository browsing state
 	registryManager    *registry.EnhancedRegistryManager
@@ -310,11 +420,22 @@ func NewModel(commandManager *commands.Manager, configManager *config.Manager, u
 	categoryInput.Placeholder = "Enter category name..."
 	categoryInput.CharLimit = 50
 	categoryInput.Width = 60
+	
+	// Initialize report issue inputs
+	issueTitleInput := textinput.New()
+	issueTitleInput.Placeholder = "Enter issue title..."
+	issueTitleInput.CharLimit = 100
+	issueTitleInput.Width = 60
+	
+	issueBodyInput := textinput.New()
+	issueBodyInput.Placeholder = "Describe the issue in detail..."
+	issueBodyInput.CharLimit = 2000
+	issueBodyInput.Width = 60
 
 	// Initialize list with custom delegate to remove default styling
-	delegate := list.NewDefaultDelegate()
-	delegate.SetHeight(1)
-	delegate.SetSpacing(0)
+	delegate := NewCustomDelegate()
+	delegate.SetHeight(3) // Account for card height (title + description + border)
+	delegate.SetSpacing(1) // Add spacing between cards
 	delegate.ShowDescription = true
 	
 	l := list.New([]list.Item{}, delegate, 0, 0)
@@ -325,7 +446,7 @@ func NewModel(commandManager *commands.Manager, configManager *config.Manager, u
 	
 	// Remove default list styling
 	l.SetShowTitle(false)
-	l.SetShowPagination(false)
+	l.SetShowPagination(true) // Enable pagination to handle overflow gracefully
 
 	// Initialize enhanced registry manager with cache support
 	registryManager, err := registry.NewEnhancedRegistryManager()
@@ -345,6 +466,8 @@ func NewModel(commandManager *commands.Manager, configManager *config.Manager, u
 		textInput:          ti,
 		searchInput:        searchInput,
 		categoryInput:      categoryInput,
+		issueTitleInput:    issueTitleInput,
+		issueBodyInput:     issueBodyInput,
 		commandManager:     commandManager,
 		configManager:      configManager,
 		userCommandManager: userCommandManager,
@@ -390,6 +513,12 @@ func (m *Model) initMainMenu() {
 			description: "Browse and import repository commands",
 			icon:        "",
 			action:      "import",
+		},
+		menuItem{
+			title:       "Request feature or report issue",
+			description: "Report a bug or request a feature",
+			icon:        "",
+			action:      "report_issue",
 		},
 	}
 	
@@ -616,6 +745,25 @@ func (m *Model) Quit() tea.Cmd {
 		tea.ExitAltScreen,
 		tea.Quit,
 	)
+}
+
+// Report issue methods
+
+// StartReportIssue initiates the report issue flow
+func (m *Model) StartReportIssue() {
+	m.state = StateReportIssue
+	m.issueCurrentField = 0 // Start with title field
+	m.issueSubmitting = false
+	m.issueSubmitError = ""
+	
+	// Clear and focus title input
+	m.issueTitleInput.SetValue("")
+	m.issueBodyInput.SetValue("")
+	m.issueTitleInput.Focus()
+	m.issueBodyInput.Blur()
+	
+	// Clear validation errors
+	m.clearValidationErrors()
 }
 
 // Remote import methods
@@ -1122,19 +1270,97 @@ func (m *Model) calculateAvailableHeight() int {
 	
 	switch m.state {
 	case StateMainMenu:
-		// Account for ASCII header - different sizes for different terminal widths  
-		if m.width < 60 {
-			return m.height - 8 - baseReserved // Simple header is smaller
+		// Account for ASCII header and card styling overhead
+		headerHeight := 15 // Full ASCII art header
+		if m.width < 80 { // Updated threshold to match view.go
+			headerHeight = 8 // Simple header is smaller
 		}
-		return m.height - 15 - baseReserved // Full ASCII art header
+		
+		// Each card item takes approximately 2 lines (borders + content)
+		// With 3 menu items, we need about 6 lines for content + some spacing
+		cardOverhead := 8
+		
+		availableHeight := m.height - headerHeight - baseReserved - cardOverhead
+		if availableHeight < 3 {
+			availableHeight = 3 // Ensure minimum viable height
+		}
+		return availableHeight
+		
 	case StateLibrary, StateRemoteBrowse, StateRemoteSelect:
 		return m.height - 6 - baseReserved // Header + footer space
+		
 	case StateRename, StateRemoteURL, StateRemoteRepoDetails, StateRemoteCategory:  
 		return m.height - 10 - baseReserved // More space for input forms
+		
 	case StateHelp:
 		return m.height - 4 - baseReserved // Minimal header for help
+		
 	default:
 		return m.height - 8 - baseReserved // Default conservative estimate
+	}
+}
+
+// validateReportIssueInput validates the report issue form inputs
+func (m *Model) validateReportIssueInput() bool {
+	m.validationErrors = make(map[string]string) // Clear previous errors
+	isValid := true
+	
+	// Validate title
+	title := strings.TrimSpace(m.issueTitleInput.Value())
+	if title == "" {
+		m.validationErrors["title"] = "Issue title is required"
+		isValid = false
+	} else if len(title) < 5 {
+		m.validationErrors["title"] = "Title must be at least 5 characters"
+		isValid = false
+	} else if len(title) > 100 {
+		m.validationErrors["title"] = "Title too long (max 100 characters)"
+		isValid = false
+	}
+	
+	// Validate body (optional but recommended)
+	body := strings.TrimSpace(m.issueBodyInput.Value())
+	if len(body) > 2000 {
+		m.validationErrors["body"] = "Description too long (max 2000 characters)"
+		isValid = false
+	}
+	
+	return isValid
+}
+
+// SubmitIssue submits the issue to GitHub
+func (m *Model) SubmitIssue() tea.Cmd {
+	title := strings.TrimSpace(m.issueTitleInput.Value())
+	body := strings.TrimSpace(m.issueBodyInput.Value())
+	
+	// Set submitting state
+	m.issueSubmitting = true
+	m.issueSubmitError = ""
+	
+	// Return async command to submit issue
+	return func() tea.Msg {
+		// Get repository information
+		repoInfo, err := remote.GetRepositoryInfo()
+		if err != nil {
+			return IssueSubmissionCompleteMsg{
+				Success: false,
+				Error:   fmt.Sprintf("Failed to get repository info: %v", err),
+			}
+		}
+		
+		// Create the issue
+		err = remote.CreateGitHubIssue(repoInfo, title, body)
+		if err != nil {
+			return IssueSubmissionCompleteMsg{
+				Success: false,
+				Error:   fmt.Sprintf("Failed to create issue: %v", err),
+			}
+		}
+		
+		return IssueSubmissionCompleteMsg{
+			Success: true,
+			IssueURL: fmt.Sprintf("https://github.com/%s/%s/issues", repoInfo.Owner, repoInfo.Repo),
+		}
 	}
 }
 

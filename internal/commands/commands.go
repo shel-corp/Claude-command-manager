@@ -11,6 +11,13 @@ import (
 	"github.com/shel-corp/Claude-command-manager/internal/config"
 )
 
+// isExcludedFile checks if a file should be excluded from command scanning
+// Excludes files with all uppercase names (like README.md, CLAUDE.md, etc.)
+func isExcludedFile(filename string) bool {
+	nameWithoutExt := strings.TrimSuffix(filename, ".md")
+	return strings.ToUpper(nameWithoutExt) == nameWithoutExt
+}
+
 // Command represents a single command with its metadata
 type Command struct {
 	Name            string                 // Original filename without .md
@@ -18,6 +25,7 @@ type Command struct {
 	Description     string                 // From YAML frontmatter
 	Enabled         bool                   // Whether it's currently enabled
 	FilePath        string                 // Full path to the .md file
+	RelativePath    string                 // Path relative to commands directory (e.g., "subdir/command.md")
 	SymlinkLocation config.SymlinkLocation // Where the command should be symlinked
 }
 
@@ -52,12 +60,22 @@ func (m *Manager) ScanCommands() ([]Command, error) {
 			return err
 		}
 
-		if !info.IsDir() && strings.HasSuffix(info.Name(), ".md") {
+		if !info.IsDir() && strings.HasSuffix(info.Name(), ".md") && !isExcludedFile(info.Name()) {
 			name := strings.TrimSuffix(info.Name(), ".md")
 			
-			// Get configuration
-			cmdConfig, exists := m.configManager.GetCommand(name)
-			displayName := name
+			// Calculate relative path from commands directory
+			relativePath, err := filepath.Rel(m.commandsDir, path)
+			if err != nil {
+				return fmt.Errorf("failed to calculate relative path for %s: %w", path, err)
+			}
+			
+			// Use relative path + name as unique identifier to handle duplicate filenames in different directories
+			uniqueName := strings.ReplaceAll(relativePath, string(filepath.Separator), "_")
+			uniqueName = strings.TrimSuffix(uniqueName, ".md")
+			
+			// Get configuration using unique name
+			cmdConfig, exists := m.configManager.GetCommand(uniqueName)
+			displayName := name // Display name remains just the filename for user friendliness
 			enabled := false
 			symlinkLocation := config.SymlinkLocationUser // Default to user
 			
@@ -75,11 +93,12 @@ func (m *Manager) ScanCommands() ([]Command, error) {
 			description := m.parseDescription(path)
 
 			commands = append(commands, Command{
-				Name:            name,
+				Name:            uniqueName,
 				DisplayName:     displayName,
 				Description:     description,
 				Enabled:         enabled,
 				FilePath:        path,
+				RelativePath:    relativePath,
 				SymlinkLocation: symlinkLocation,
 			})
 		}
@@ -118,6 +137,7 @@ func (m *Manager) EnableCommand(cmd Command) error {
 		OriginalName:    cmd.Name,
 		DisplayName:     cmd.DisplayName,
 		SourcePath:      cmd.FilePath,
+		RelativePath:    cmd.RelativePath,
 		SymlinkLocation: cmd.SymlinkLocation,
 	})
 
@@ -137,6 +157,7 @@ func (m *Manager) DisableCommand(cmd Command) error {
 		OriginalName:    cmd.Name,
 		DisplayName:     cmd.DisplayName,
 		SourcePath:      cmd.FilePath,
+		RelativePath:    cmd.RelativePath,
 		SymlinkLocation: cmd.SymlinkLocation,
 	})
 
@@ -172,6 +193,7 @@ func (m *Manager) RenameCommand(cmd Command, newDisplayName string) error {
 		OriginalName:    cmd.Name,
 		DisplayName:     newDisplayName,
 		SourcePath:      cmd.FilePath,
+		RelativePath:    cmd.RelativePath,
 		SymlinkLocation: cmd.SymlinkLocation,
 	})
 
@@ -195,7 +217,19 @@ func (m *Manager) createSymlink(cmd Command) error {
 		return fmt.Errorf("failed to get absolute path: %w", err)
 	}
 
-	symlinkDir := m.getSymlinkDir(cmd.SymlinkLocation)
+	symlinkBaseDir := m.getSymlinkDir(cmd.SymlinkLocation)
+	
+	// Create the cl/ subdirectory structure
+	relativeDir := filepath.Dir(cmd.RelativePath)
+	var symlinkDir string
+	if relativeDir == "." {
+		// Command is in root of commands directory
+		symlinkDir = filepath.Join(symlinkBaseDir, "cl")
+	} else {
+		// Command is in a subdirectory
+		symlinkDir = filepath.Join(symlinkBaseDir, "cl", relativeDir)
+	}
+	
 	targetPath := filepath.Join(symlinkDir, cmd.DisplayName+".md")
 	
 	// Ensure symlink directory exists
@@ -228,7 +262,19 @@ func (m *Manager) createSymlink(cmd Command) error {
 
 // removeSymlink removes a symlink for the command
 func (m *Manager) removeSymlink(cmd Command) error {
-	symlinkDir := m.getSymlinkDir(cmd.SymlinkLocation)
+	symlinkBaseDir := m.getSymlinkDir(cmd.SymlinkLocation)
+	
+	// Build the cl/ subdirectory structure path
+	relativeDir := filepath.Dir(cmd.RelativePath)
+	var symlinkDir string
+	if relativeDir == "." {
+		// Command is in root of commands directory
+		symlinkDir = filepath.Join(symlinkBaseDir, "cl")
+	} else {
+		// Command is in a subdirectory
+		symlinkDir = filepath.Join(symlinkBaseDir, "cl", relativeDir)
+	}
+	
 	targetPath := filepath.Join(symlinkDir, cmd.DisplayName+".md")
 
 	// Check if it exists and is a symlink
@@ -279,6 +325,7 @@ func (m *Manager) ToggleSymlinkLocation(cmd Command) error {
 		OriginalName:    cmd.Name,
 		DisplayName:     cmd.DisplayName,
 		SourcePath:      cmd.FilePath,
+		RelativePath:    cmd.RelativePath,
 		SymlinkLocation: newLocation,
 	})
 
@@ -340,27 +387,31 @@ func (m *Manager) CleanupBrokenSymlinks() error {
 			continue // Directory doesn't exist, nothing to clean
 		}
 
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to read commands directory %s: %v\n", dir, err)
+		// Check for the cl/ subdirectory
+		clDir := filepath.Join(dir, "cl")
+		if _, err := os.Stat(clDir); os.IsNotExist(err) {
+			// Also check the old flat structure for backward compatibility
+			removed, err := m.cleanupSymlinksInDir(dir)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to cleanup symlinks in %s: %v\n", dir, err)
+			}
+			totalRemoved = append(totalRemoved, removed...)
 			continue
 		}
 
-		for _, entry := range entries {
-			if entry.Type()&os.ModeSymlink != 0 {
-				fullPath := filepath.Join(dir, entry.Name())
-				
-				// Check if symlink target exists
-				if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-					// Broken symlink, remove it
-					if err := os.Remove(fullPath); err != nil {
-						fmt.Fprintf(os.Stderr, "Warning: failed to remove broken symlink %s: %v\n", fullPath, err)
-					} else {
-						totalRemoved = append(totalRemoved, entry.Name())
-					}
-				}
-			}
+		// Clean up the cl/ directory recursively
+		removed, err := m.cleanupSymlinksRecursive(clDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to cleanup symlinks in %s: %v\n", clDir, err)
 		}
+		totalRemoved = append(totalRemoved, removed...)
+
+		// Also check the old flat structure for backward compatibility
+		removed, err = m.cleanupSymlinksInDir(dir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to cleanup symlinks in %s: %v\n", dir, err)
+		}
+		totalRemoved = append(totalRemoved, removed...)
 	}
 
 	if len(totalRemoved) > 0 {
@@ -368,4 +419,61 @@ func (m *Manager) CleanupBrokenSymlinks() error {
 	}
 
 	return nil
+}
+
+// cleanupSymlinksInDir removes broken symlinks in a single directory (non-recursive)
+func (m *Manager) cleanupSymlinksInDir(dir string) ([]string, error) {
+	var removed []string
+	
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, entry := range entries {
+		if entry.Type()&os.ModeSymlink != 0 {
+			fullPath := filepath.Join(dir, entry.Name())
+			
+			// Check if symlink target exists
+			if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+				// Broken symlink, remove it
+				if err := os.Remove(fullPath); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: failed to remove broken symlink %s: %v\n", fullPath, err)
+				} else {
+					removed = append(removed, entry.Name())
+				}
+			}
+		}
+	}
+	
+	return removed, nil
+}
+
+// cleanupSymlinksRecursive removes broken symlinks recursively in a directory tree
+func (m *Manager) cleanupSymlinksRecursive(dir string) ([]string, error) {
+	var removed []string
+	
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if info.Mode()&os.ModeSymlink != 0 {
+			// Check if symlink target exists
+			if _, err := os.Stat(path); os.IsNotExist(err) {
+				// Broken symlink, remove it
+				if err := os.Remove(path); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: failed to remove broken symlink %s: %v\n", path, err)
+				} else {
+					// Store relative path from base dir for reporting
+					relPath, _ := filepath.Rel(dir, path)
+					removed = append(removed, filepath.Join("cl", relPath))
+				}
+			}
+		}
+
+		return nil
+	})
+	
+	return removed, err
 }

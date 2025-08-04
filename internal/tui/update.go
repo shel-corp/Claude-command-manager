@@ -43,6 +43,13 @@ type (
 		Result *remote.ImportResult
 		Error  string
 	}
+	
+	// IssueSubmissionCompleteMsg contains issue submission results
+	IssueSubmissionCompleteMsg struct {
+		Success  bool
+		Error    string
+		IssueURL string
+	}
 )
 
 // Init initializes the application
@@ -96,6 +103,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case RemoteImportCompleteMsg:
 		return m.handleRemoteImportComplete(msg)
+
+	case IssueSubmissionCompleteMsg:
+		return m.handleIssueSubmissionComplete(msg)
 
 	case tea.KeyMsg:
 		return m.handleKeyMsg(msg)
@@ -158,6 +168,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		
 	case StateRemoteResults:
 		// No input needed, just wait for user to exit
+		
+	case StateReportIssue:
+		// Handle input updates for issue form fields
+		if m.issueCurrentField == 0 {
+			m.issueTitleInput, cmd = m.issueTitleInput.Update(msg)
+			cmds = append(cmds, cmd)
+		} else {
+			m.issueBodyInput, cmd = m.issueBodyInput.Update(msg)
+			cmds = append(cmds, cmd)
+		}
 	}
 
 	return m, tea.Batch(cmds...)
@@ -188,6 +208,8 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleRemotePreviewStateKeys(msg)
 	case StateRemoteResults:
 		return m.handleRemoteResultsStateKeys(msg)
+	case StateReportIssue:
+		return m.handleReportIssueStateKeys(msg)
 	}
 	
 	return m, nil
@@ -237,6 +259,9 @@ func (m *Model) executeSelectedMenuItem() (tea.Model, tea.Cmd) {
 		}
 	case "import":
 		m.StartRemoteImport()
+		return m, nil
+	case "report_issue":
+		m.StartReportIssue()
 		return m, nil
 	}
 	
@@ -425,6 +450,22 @@ func (m *Model) handleRemoteImportComplete(msg RemoteImportCompleteMsg) (tea.Mod
 	m.state = StateRemoteResults
 	
 	return m, nil
+}
+
+func (m *Model) handleIssueSubmissionComplete(msg IssueSubmissionCompleteMsg) (tea.Model, tea.Cmd) {
+	m.issueSubmitting = false
+	
+	if msg.Success {
+		// Show success message and return to main menu
+		m.setStatus("Issue submitted successfully! 🎉", StatusSuccess)
+		m.state = StateMainMenu
+		m.initMainMenu()
+		return m, nil
+	} else {
+		// Show error and stay in report issue form
+		m.issueSubmitError = msg.Error
+		return m, nil
+	}
 }
 
 // Remote state key handlers
@@ -821,6 +862,74 @@ func (m *Model) handleRemoteCategoryStateKeys(msg tea.KeyMsg) (tea.Model, tea.Cm
 		// Handle list navigation for category selection
 		var cmd tea.Cmd
 		m.list, cmd = m.list.Update(msg)
+		return m, cmd
+	}
+}
+
+// handleReportIssueStateKeys handles keys in the report issue state
+func (m *Model) handleReportIssueStateKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		// Submit the issue
+		if m.validateReportIssueInput() && !m.issueSubmitting {
+			return m, m.SubmitIssue()
+		}
+		return m, nil // Show validation errors
+		
+	case "tab":
+		// Switch between fields
+		m.clearValidationErrors()
+		if m.issueCurrentField == 0 {
+			// Switch from title to body
+			m.issueCurrentField = 1
+			m.issueTitleInput.Blur()
+			m.issueBodyInput.Focus()
+		} else {
+			// Switch from body to title
+			m.issueCurrentField = 0
+			m.issueBodyInput.Blur()
+			m.issueTitleInput.Focus()
+		}
+		return m, nil
+		
+	case "shift+tab":
+		// Switch between fields (reverse direction)
+		m.clearValidationErrors()
+		if m.issueCurrentField == 0 {
+			// Switch from title to body
+			m.issueCurrentField = 1
+			m.issueTitleInput.Blur()
+			m.issueBodyInput.Focus()
+		} else {
+			// Switch from body to title
+			m.issueCurrentField = 0
+			m.issueBodyInput.Blur()
+			m.issueTitleInput.Focus()
+		}
+		return m, nil
+		
+	case "esc":
+		// Cancel and return to main menu
+		m.clearValidationErrors()
+		m.state = StateMainMenu
+		m.initMainMenu()
+		return m, nil
+		
+	case "ctrl+c":
+		return m, m.Quit()
+	}
+	
+	// Clear validation errors on input change
+	m.clearValidationErrors()
+	
+	// Let the appropriate text input handle other keys
+	if m.issueCurrentField == 0 {
+		var cmd tea.Cmd
+		m.issueTitleInput, cmd = m.issueTitleInput.Update(msg)
+		return m, cmd
+	} else {
+		var cmd tea.Cmd
+		m.issueBodyInput, cmd = m.issueBodyInput.Update(msg)
 		return m, cmd
 	}
 }

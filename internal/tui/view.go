@@ -3,6 +3,8 @@ package tui
 import (
 	"fmt"
 	"strings"
+	
+	"github.com/charmbracelet/lipgloss"
 )
 
 // min returns the smaller of two integers
@@ -61,6 +63,9 @@ func (m *Model) View() string {
 	case StateRemoteResults:
 		stateStr = "RemoteResults"
 		return m.remoteResultsView()
+	case StateReportIssue:
+		stateStr = "ReportIssue"
+		return m.reportIssueView()
 	}
 
 	// Fallback with debug info
@@ -73,7 +78,7 @@ func (m *Model) mainMenuView() string {
 	// debugInfo := fmt.Sprintf("DEBUG: MainMenu - Width: %d, Height: %d, ListItems: %d\n", 
 	//	m.width, m.height, len(m.list.Items()))
 	
-	// Elegant header for Claude Command Manager with margins
+	// Create styled header with consistent design language
 	asciiHeader := `
 
 
@@ -82,32 +87,63 @@ func (m *Model) mainMenuView() string {
 
 
 
-    ╭──────────────────────────────────────────────────────╮
-    │                                                      │
-    │   ██████╗██╗      █████╗ ██╗   ██╗██████╗ ███████╗   │
-    │  ██╔════╝██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝   │
-    │  ██║     ██║     ███████║██║   ██║██║  ██║█████╗     │
-    │  ██║     ██║     ██╔══██║██║   ██║██║  ██║██╔══╝     │
-    │  ╚██████╗███████╗██║  ██║╚██████╔╝██████╔╝███████╗   │
-    │   ╚═════╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝   │
-    │                                                      │
-    │                  	Command Manager                    │
-    │                                                      │
-    ╰──────────────────────────────────────────────────────╯`
+██████╗██╗      █████╗ ██╗   ██╗██████╗ ███████╗
+██╔════╝██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝
+██║     ██║     ███████║██║   ██║██║  ██║█████╗  
+██║     ██║     ██╔══██║██║   ██║██║  ██║██╔══╝  
+╚██████╗███████╗██║  ██║╚██████╔╝██████╔╝███████╗
+ ╚═════╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝
 
-	// Responsive header - show simple version on narrow terminals
-	var finalHeader string
-	if m.width < 60 {
-		finalHeader = "╭──────────────────────╮\n│   CLAUDE COMMANDS    │\n╰──────────────────────╯"
+Command Manager`
+
+	var headerContent string
+	if m.width < 80 { // Increased threshold since ASCII art is wide
+		// Compact header for narrow terminals
+		headerContent = "CLAUDE COMMANDS\nCommand Manager"
 	} else {
-		finalHeader = asciiHeader
+		// Full ASCII art header for wider terminals  
+		headerContent = asciiHeader
 	}
 	
-	content := m.list.View()
-	footer := "↑/↓: Navigate • Enter: Select • q: Quit • h: Help"
+	// Style the header with clean, borderless design
+	headerStyle := lipgloss.NewStyle().
+		Foreground(primaryColor).
+		Padding(2, 3).
+		Margin(1, 0).
+		Align(lipgloss.Center).
+		Width(m.width - 10)
 	
-	// Clean layout without debug info
-	result := finalHeader + "\n\n" + content + "\n\n" + footer
+	// Apply styling and center the header
+	finalHeader := lipgloss.NewStyle().
+		Width(m.width).
+		Align(lipgloss.Center).
+		Render(headerStyle.Render(headerContent))
+	
+	// Get the menu content
+	content := m.list.View()
+	
+	// Create an elegant footer with better styling
+	footerStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#64748B")).
+		Background(lipgloss.Color("#0F172A")).
+		Padding(1, 2).
+		Margin(1, 0).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#334155")).
+		Align(lipgloss.Center).
+		Width(m.width - 10)
+	
+	footerText := "↑/↓ Navigate  •  Enter Select  •  q Quit  •  h Help"
+	footer := lipgloss.NewStyle().
+		Width(m.width).
+		Align(lipgloss.Center).
+		Render(footerStyle.Render(footerText))
+	
+	// Add extra spacing for better visual breathing room
+	spacer := "\n\n"
+	
+	// Combine all elements with proper spacing
+	result := finalHeader + spacer + content + spacer + footer
 	
 	return result
 }
@@ -652,6 +688,65 @@ func (m *Model) newCategoryCreationView() string {
 	content.WriteString(subtleStyle.Render("You can customize these later."))
 
 	footer := "Enter: Create Category • Esc: Back to Category List"
+	
+	return centerView(header, content.String(), footer, m.width)
+}
+
+// reportIssueView renders the report issue form
+func (m *Model) reportIssueView() string {
+	header := "Request Feature or Report Issue"
+	
+	var content strings.Builder
+	content.WriteString(subtleStyle.Render("Help us improve ccm by reporting bugs or requesting features:"))
+	content.WriteString("\n\n")
+	
+	// Field 1: Issue Title
+	titleStyle := subtleStyle
+	if m.issueCurrentField == 0 {
+		titleStyle = highlightStyle
+	}
+	content.WriteString(titleStyle.Render("Issue Title:"))
+	content.WriteString("\n")
+	content.WriteString(m.issueTitleInput.View())
+	content.WriteString("\n")
+	
+	// Show validation errors for title
+	if errorMsg, hasError := m.validationErrors["title"]; hasError {
+		content.WriteString(dangerStyle.Render("⚠️ " + errorMsg))
+		content.WriteString("\n")
+	}
+	content.WriteString("\n")
+	
+	// Field 2: Issue Body
+	bodyStyle := subtleStyle
+	if m.issueCurrentField == 1 {
+		bodyStyle = highlightStyle
+	}
+	content.WriteString(bodyStyle.Render("Issue Description:"))
+	content.WriteString("\n")
+	content.WriteString(m.issueBodyInput.View())
+	content.WriteString("\n")
+	
+	// Show validation errors for body
+	if errorMsg, hasError := m.validationErrors["body"]; hasError {
+		content.WriteString(dangerStyle.Render("⚠️ " + errorMsg))
+		content.WriteString("\n")
+	}
+	content.WriteString("\n")
+	
+	// Show submit error if present
+	if m.issueSubmitError != "" {
+		content.WriteString(dangerStyle.Render("Error: " + m.issueSubmitError))
+		content.WriteString("\n\n")
+	}
+	
+	// Show submission status
+	if m.issueSubmitting {
+		content.WriteString("📤 Submitting issue...")
+		content.WriteString("\n")
+	}
+	
+	footer := "Tab: Switch Field • Enter: Submit • Esc: Cancel • Ctrl+C: Quit"
 	
 	return centerView(header, content.String(), footer, m.width)
 }

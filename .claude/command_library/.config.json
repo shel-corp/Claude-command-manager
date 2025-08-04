@@ -1,3 +1,20 @@
 {
-  "commands": {}
+  "commands": {
+    "analyze_code": {
+      "enabled": true,
+      "original_name": "analyze_code",
+      "display_name": "analyze_code",
+      "source_path": "/Users/sheltontolbert/repos/claude_command_manager/.claude/command_library/commands/analyze_code.md",
+      "relative_path": "analyze_code.md",
+      "symlink_location": "user"
+    },
+    "test_subdir_test_command": {
+      "enabled": false,
+      "original_name": "test_subdir_test_command",
+      "display_name": "test_command",
+      "source_path": "/Users/sheltontolbert/repos/claude_command_manager/.claude/command_library/commands/test_subdir/test_command.md",
+      "relative_path": "test_subdir/test_command.md",
+      "symlink_location": "user"
+    }
+  }
 }

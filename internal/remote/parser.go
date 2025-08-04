@@ -9,53 +9,76 @@ import (
 
 // ParseGitHubURL parses various GitHub URL formats and extracts repository information
 func ParseGitHubURL(rawURL string) (*RemoteRepository, error) {
-	// Normalize URL - add https:// if missing
-	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
-		rawURL = "https://" + rawURL
-	}
-
-	parsedURL, err := url.Parse(rawURL)
-	if err != nil {
-		return nil, fmt.Errorf("invalid URL format: %w", err)
-	}
-
-	// Validate it's a GitHub URL
-	if parsedURL.Host != "github.com" && parsedURL.Host != "www.github.com" {
-		return nil, fmt.Errorf("only GitHub URLs are supported, got: %s", parsedURL.Host)
-	}
-
-	// Extract path components
-	pathParts := strings.Split(strings.Trim(parsedURL.Path, "/"), "/")
-	if len(pathParts) < 2 {
-		return nil, fmt.Errorf("invalid GitHub URL: missing owner/repo")
-	}
-
-	owner := pathParts[0]
-	repo := pathParts[1]
+	var owner, repo string
 	branch := "main" // default branch
 	commandPath := ""
-
-	// Handle different URL formats:
-	// 1. https://github.com/owner/repo/tree/branch/path/to/commands
-	// 2. https://github.com/owner/repo/path/to/commands (assume main branch)
-	// 3. https://github.com/owner/repo (assume main/.claude/commands)
-
-	if len(pathParts) > 2 {
-		if pathParts[2] == "tree" && len(pathParts) > 3 {
-			// Format 1: explicit branch with tree
-			branch = pathParts[3]
-			if len(pathParts) > 4 {
-				commandPath = strings.Join(pathParts[4:], "/")
-			}
-		} else {
-			// Format 2: assume main branch, path starts at index 2
-			commandPath = strings.Join(pathParts[2:], "/")
+	
+	// Handle SSH format: git@github.com:owner/repo.git
+	if strings.HasPrefix(rawURL, "git@github.com:") {
+		// Extract the part after the colon
+		parts := strings.TrimPrefix(rawURL, "git@github.com:")
+		// Remove .git suffix if present
+		parts = strings.TrimSuffix(parts, ".git")
+		
+		// Split by slash to get owner/repo
+		pathComponents := strings.Split(parts, "/")
+		if len(pathComponents) < 2 {
+			return nil, fmt.Errorf("invalid SSH GitHub URL format: missing owner/repo")
 		}
-	}
-
-	// If no path specified, assume .claude/commands as default
-	if commandPath == "" {
+		
+		owner = pathComponents[0]
+		repo = pathComponents[1]
+		
+		// For SSH URLs from git remotes, assume .claude/commands path
 		commandPath = ".claude/commands"
+	} else {
+		// Handle HTTPS format
+		// Normalize URL - add https:// if missing
+		if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
+			rawURL = "https://" + rawURL
+		}
+
+		parsedURL, err := url.Parse(rawURL)
+		if err != nil {
+			return nil, fmt.Errorf("invalid URL format: %w", err)
+		}
+
+		// Validate it's a GitHub URL
+		if parsedURL.Host != "github.com" && parsedURL.Host != "www.github.com" {
+			return nil, fmt.Errorf("only GitHub URLs are supported, got: %s", parsedURL.Host)
+		}
+
+		// Extract path components
+		pathParts := strings.Split(strings.Trim(parsedURL.Path, "/"), "/")
+		if len(pathParts) < 2 {
+			return nil, fmt.Errorf("invalid GitHub URL: missing owner/repo")
+		}
+
+		owner = pathParts[0]
+		repo = pathParts[1]
+
+		// Handle different URL formats:
+		// 1. https://github.com/owner/repo/tree/branch/path/to/commands
+		// 2. https://github.com/owner/repo/path/to/commands (assume main branch)
+		// 3. https://github.com/owner/repo (assume main/.claude/commands)
+
+		if len(pathParts) > 2 {
+			if pathParts[2] == "tree" && len(pathParts) > 3 {
+				// Format 1: explicit branch with tree
+				branch = pathParts[3]
+				if len(pathParts) > 4 {
+					commandPath = strings.Join(pathParts[4:], "/")
+				}
+			} else {
+				// Format 2: assume main branch, path starts at index 2
+				commandPath = strings.Join(pathParts[2:], "/")
+			}
+		}
+
+		// If no path specified, assume .claude/commands as default
+		if commandPath == "" {
+			commandPath = ".claude/commands"
+		}
 	}
 
 	// No validation on directory name - allow any directory structure

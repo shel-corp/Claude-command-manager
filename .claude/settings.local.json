@@ -17,7 +17,13 @@
       "Bash(./ccm debug)",
       "Bash(go run:*)",
       "Bash(git tag:*)",
-      "Bash(gh repo view:*)"
+      "Bash(gh repo view:*)",
+      "Bash(brew install:*)",
+      "Bash(find:*)",
+      "Bash(gh label:*)",
+      "Bash(timeout:*)",
+      "Bash(./ccm help)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": []
   }
