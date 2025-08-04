@@ -101,14 +101,14 @@ var (
 		ID:          "gruvbox-material",
 		Name:        "Gruvbox Material",
 		Description: "Warm, earthy theme designed to protect developers' eyes",
-		Primary:     lipgloss.AdaptiveColor{Light: "#7daea3", Dark: "#7daea3"}, // Blue-green
+		Primary:     lipgloss.AdaptiveColor{Light: "#d4be98", Dark: "#ebdbb2"}, // Light beige / Cream (swapped from border)
 		Success:     lipgloss.AdaptiveColor{Light: "#a9b665", Dark: "#a9b665"}, // Green
 		Danger:      lipgloss.AdaptiveColor{Light: "#ea6962", Dark: "#ea6962"}, // Red
 		Warning:     lipgloss.AdaptiveColor{Light: "#d8a657", Dark: "#d8a657"}, // Yellow
-		Muted:       lipgloss.AdaptiveColor{Light: "#928374", Dark: "#928374"}, // Gray
+		Muted:       lipgloss.AdaptiveColor{Light: "#7daea3", Dark: "#7daea3"}, // Blue-green (swapped from primary)
 		Background:  lipgloss.AdaptiveColor{Light: "#fbf1c7", Dark: "#282828"}, // Light cream / Dark brown
 		Text:        lipgloss.AdaptiveColor{Light: "#3c3836", Dark: "#d4be98"}, // Dark brown / Light beige
-		Border:      lipgloss.AdaptiveColor{Light: "#ebdbb2", Dark: "#504945"}, // Light beige / Dark gray
+		Border:      lipgloss.AdaptiveColor{Light: "#928374", Dark: "#504945"}, // Gray / Dark gray (swapped from muted)
 	}
 )
 
