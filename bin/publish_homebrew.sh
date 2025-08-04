@@ -125,21 +125,23 @@ calculate_sha256() {
     local version=$1
     local tarball_url="${REPO_URL}/archive/refs/tags/${version}.tar.gz"
     
-    log_info "Calculating SHA256 for release tarball..."
-    log_info "URL: $tarball_url"
+    log_info "Calculating SHA256 for release tarball..." >&2
+    log_info "URL: $tarball_url" >&2
     
     # Wait a moment for GitHub to generate the tarball
     sleep 5
     
-    local sha256=$(curl -sL "$tarball_url" | shasum -a 256 | cut -d' ' -f1 | tr -d '\n')
+    # Calculate SHA256 with all output redirected properly
+    local sha256
+    sha256=$(curl -sL "$tarball_url" 2>/dev/null | shasum -a 256 2>/dev/null | cut -d' ' -f1 | tr -d '\n\r[:space:]')
     
-    if [ -z "$sha256" ]; then
-        log_error "Failed to calculate SHA256. Please check if the release exists on GitHub."
+    if [ -z "$sha256" ] || [ ${#sha256} -ne 64 ]; then
+        log_error "Failed to calculate SHA256. Please check if the release exists on GitHub." >&2
         exit 1
     fi
     
-    log_success "SHA256: $sha256" >&2  # Send to stderr to avoid capture
-    echo "$sha256"  # Only echo the clean SHA256 to stdout
+    log_success "SHA256: $sha256" >&2
+    printf '%s' "$sha256"  # Use printf to avoid any newlines
 }
 
 # Update formula file
@@ -337,16 +339,9 @@ main() {
     log_info "Waiting for GitHub to process the new tag..."
     sleep 10
     
-    # Capture SHA256 calculation with explicit output handling
+    # Calculate SHA256 for the release
     local sha256
-    sha256=$(calculate_sha256 "$version" 2>/dev/null)
-    if [ -z "$sha256" ]; then
-        log_error "Failed to get SHA256 from calculate_sha256 function"
-        exit 1
-    fi
-    
-    # Debug: ensure SHA256 is clean
-    sha256=$(echo -n "$sha256" | tr -d '\n\r' | tr -d '[:cntrl:]')
+    sha256=$(calculate_sha256 "$version")
     
     update_formula "$version" "$sha256"
     test_formula
