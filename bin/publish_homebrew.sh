@@ -138,8 +138,8 @@ calculate_sha256() {
         exit 1
     fi
     
-    log_success "SHA256: $sha256"
-    echo "$sha256"
+    log_success "SHA256: $sha256" >&2  # Send to stderr to avoid capture
+    echo "$sha256"  # Only echo the clean SHA256 to stdout
 }
 
 # Update formula file
