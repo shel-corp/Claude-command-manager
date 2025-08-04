@@ -131,7 +131,7 @@ calculate_sha256() {
     # Wait a moment for GitHub to generate the tarball
     sleep 5
     
-    local sha256=$(curl -sL "$tarball_url" | shasum -a 256 | cut -d' ' -f1)
+    local sha256=$(curl -sL "$tarball_url" | shasum -a 256 | cut -d' ' -f1 | tr -d '\n')
     
     if [ -z "$sha256" ]; then
         log_error "Failed to calculate SHA256. Please check if the release exists on GitHub."
